@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "sLAM"
 version = "1.0"
-description = "Code to create a Small LAnguage Model using personal computing."
+description = "Code to create a GPT-2 Small LAnguage Model"
 authors = ["Brian Osborne <bosborne@alum.mit.edu>"]
 readme = "README.md"
 packages = [{ include = "sLAM" }]
