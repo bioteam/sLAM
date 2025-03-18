@@ -5,7 +5,7 @@ description = "Code to create a GPT-2-style small LAnguage Model"
 authors = ["Brian Osborne <bosborne@alum.mit.edu>"]
 readme = "README.md"
 packages = [{ include = "sLAM" }]
-include = ["sLAM/make-slam.py", "sLAM/get-readmes.py"]
+include = ["sLAM/make-slam.py", "sLAM/get-readmes.py", "sLAM/run-slam.py"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
