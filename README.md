@@ -12,18 +12,18 @@ pip3 install .
 
 ## Usage
 
-### Gather README files
+### Gather some GitHub README files
 
-Requires a GitHub API key. Customize the queries in *get_readmes.py* script.
+Requires a GitHub API key. Customize the queries in the *get_readmes.py* script.
 
 ```sh
-python3 sLAM/get_readmes.py 
+python3 sLAM/get-readmes.py 
 ```
 
 ### Create a model
 
 ```sh
-python3 sLAM/decoder-only-custom-slam.py -d github_readmes/
+python3 sLAM/make-slam.py -d github_readmes/
 ```
 
 ### Query the model
