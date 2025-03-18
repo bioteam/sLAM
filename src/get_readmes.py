@@ -7,7 +7,6 @@ from tqdm import tqdm
 
 # GitHub API token - create one at https://github.com/settings/tokens
 # No special permissions required for public repos
-# Replace with your token or use environment variable
 GITHUB_TOKEN = os.environ.get("GITHUB_API_KEY")
 
 # Directory to save README files
