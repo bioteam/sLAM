@@ -16,7 +16,7 @@ pip3 install .
 
 Requires a GitHub API key (Settings -> Developer Settings -> Personal access tokens -> Tokens (classic) ).
 
-Customize the queries in the *get_readmes.py* script.
+Customize the queries in the *get-readmes.py* script.
 
 ```sh
 python3 sLAM/get-readmes.py 

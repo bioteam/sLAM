@@ -356,7 +356,9 @@ def main():
     print(sample_text)
     """
     Generated text:
-    Once upon a time if this mode mode seconds default is <UNK> mode bring the fastest but if the traffic dns address name parameter must be used for this parameter is 0 0 0 no number of traffic mode by traffic url no matter how many traffic bytes used for each mode if it
+    Once upon a time if this mode mode seconds default is <UNK> mode bring the fastest but 
+    if the traffic dns address name parameter must be used for this parameter is 0 0 0 no number 
+    of traffic mode by traffic url no matter how many traffic bytes used for each mode if it
     """
     model.save(
         f"{args.input_dir}/{time.strftime('%m-%d-%Y-%H-%M-%S', time.localtime())}.keras"
