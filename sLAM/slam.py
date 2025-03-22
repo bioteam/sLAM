@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import os
+import random
+import sys
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
@@ -60,8 +62,6 @@ class slam_builder:
         physical_devices = tf.config.list_physical_devices("GPU")
         if len(physical_devices) > 0:
             tf.config.experimental.set_memory_growth(physical_devices[0], True)
-
-        self.create_simple_tokenizer()
 
     # Define the transformer block
     def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
@@ -166,6 +166,10 @@ class slam_builder:
     # Create a simple tokenizer
     def create_simple_tokenizer(self):
         """Creates a simple WordPiece tokenizer."""
+        if self.verbose:
+            print(
+                "Create a simple tokenizer (tf.keras.preprocessing.text.Tokenizer) with an estimated vocabulary size"
+            )
         vocab_size = min(self.vocab_size, 30000)  # Limit vocab for efficiency
 
         # bert_tokenizer = tf_text.BertTokenizer(
@@ -178,7 +182,7 @@ class slam_builder:
         #     split_unknown_characters=False,
         # )
 
-        # If you prefer to use a simpler tokenizer:
+        # A simpler tokenizer:
         self.tokenizer = tf.keras.preprocessing.text.Tokenizer(
             num_words=vocab_size, oov_token="<UNK>"
         )
@@ -191,19 +195,23 @@ class slam_builder:
         3. It computes word frequencies and other metadata
         4. It doesn't return tokenized sequences - it just prepares the tokenizer
         """
+        if self.verbose:
+            print(
+                "Running fit() to create word-to-int and int-to-word indices based on input text"
+            )
         self.tokenizer.fit_on_texts(texts)
 
         # Add special tokens
-        self.word_index = self.tokenizer.word_index
+        word_index = self.tokenizer.word_index
         # Padding token
-        self.word_index["<PAD>"] = 0
+        word_index["<PAD>"] = 0
         # Beginning of sequence
-        self.word_index["<BOS>"] = len(self.word_index) + 1
+        word_index["<BOS>"] = len(self.word_index) + 1
         # End of sequence
-        self.word_index["<EOS>"] = len(self.word_index) + 1
+        word_index["<EOS>"] = len(self.word_index) + 1
 
         # Reverse the word index for decoding
-        self.index_word = {v: k for k, v in self.word_index.items()}
+        self.index_word = {v: k for k, v in word_index.items()}
 
         # Adjust vocab_size to actual vocabulary size
         self.vocab_size = len(self.word_index) + 1
@@ -211,6 +219,10 @@ class slam_builder:
             print(f"Actual vocabulary size: {self.vocab_size}")
 
     def load_text(self, file_paths):
+        if self.verbose:
+            print(
+                "Running load_text() to read text files and return one string"
+            )
         all_text = ""
         for file_path in file_paths:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -219,12 +231,28 @@ class slam_builder:
 
     # Function to prepare the dataset
 
-    def prepare_dataset(self, all_text):
+    def prepare_dataset(self, text, percentage):
         """
         Converts text to sequences of integers which are token
         ids that correspond to the indices in word_index.
         """
-        token_ids = self.tokenizer.texts_to_sequences([all_text])[0]
+        if self.verbose:
+            print(
+                "Running prepare_dataset() to tokenize, prepare input and target tokens, and create a tf.data.Dataset.from_tensor_slices"
+            )
+        if percentage != 100:
+            if percentage > 100:
+                sys.exit("Invalid percentage: {percentage}")
+            if self.verbose:
+                print(
+                    f"Using {percentage} percent of input text in the dataset"
+                )
+            text_array = text.split("\n\n")
+            num_elements = int(len(text_array) * percentage / 100)
+            random_selection = random.sample(text_array, num_elements)
+            text = "\n\n".join(random_selection)
+
+        token_ids = self.tokenizer.texts_to_sequences([text])[0]
         # Create examples with context_size + 1 (inputs and targets)
         examples = []
         for i in range(0, len(token_ids) - self.context_size):
@@ -302,13 +330,12 @@ class slam_builder:
     def generate_text(
         self,
         model,
-        index_word,
-        seed_text,
+        prompt,
         max_length=100,
         temperature=0.7,
     ):
         # Tokenize seed text
-        input_ids = self.tokenizer.texts_to_sequences([seed_text])[0]
+        input_ids = self.tokenizer.texts_to_sequences([prompt])[0]
 
         # Truncate or pad if necessary
         context_size = model.inputs[0].shape[1]
@@ -317,7 +344,7 @@ class slam_builder:
         else:
             input_ids = [0] * (context_size - len(input_ids)) + input_ids
 
-        generated_text = seed_text
+        generated_text = prompt
         input_ids = np.array([input_ids])
 
         # Generate text token by token
@@ -335,8 +362,8 @@ class slam_builder:
             input_ids[0, -1] = predicted_id
 
             # Convert token to word and add to generated text
-            if predicted_id in index_word:
-                word = index_word[predicted_id]
+            if predicted_id in self.index_word:
+                word = self.index_word[predicted_id]
                 generated_text += " " + word
 
                 # Stop if we generate an end token

@@ -1,6 +1,6 @@
 # sLAM
 
-Code to create a GPT-2-style, decoder-only Small LAnguage Model that can be built using personal computing. A utility script is included that downloads GitHub READMEs for input.
+Demonstration code to create a GPT-2-style, decoder-only Small LAnguage Model that can be built using personal computing. A utility script is included that downloads GitHub READMEs for input.
 
 ## Installation
 
