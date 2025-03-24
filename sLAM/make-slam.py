@@ -1,7 +1,4 @@
 import argparse
-import glob
-import pickle
-import time
 from slam import slam_builder
 
 
@@ -14,34 +11,37 @@ parser.add_argument(
 )
 parser.add_argument(
     "-p",
-    "--percent_texts",
+    "--percent_files",
     default=100,
     type=int,
-    help="Percentage of text used in dataset",
+    help="Percentage of files used in dataset",
 )
-parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
+parser.add_argument(
+    "-n",
+    "--name",
+    help="Default is timestamp of completion",
+)
+parser.add_argument("-q", "--quiet", action="store_true", help="Not verbose")
 args = parser.parse_args()
 
 
-builder = slam_builder(verbose=args.verbose)
+builder = slam_builder(quiet=args.quiet, name=args.name)
 
-file_paths = glob.glob(f"{args.input_dir}/*.md")
+texts = builder.load_text(args.input_dir, args.percent_files)
 
-all_texts = builder.load_text(file_paths)
+builder.create_tokenizer()
 
-builder.create_simple_tokenizer()
+builder.fit(texts)
 
-builder.fit(all_texts)
-
-dataset = builder.prepare_dataset(all_texts, args.percent_texts)
+dataset = builder.prepare_dataset(texts)
 
 model = builder.create_small_gpt2_model()
 
-model.summary()
-
 builder.train_model(dataset, model)
 
-timestamp = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
-model.save(f"slam-{timestamp}.keras")
-with open(f"builder-{timestamp}.bin", "wb") as f:
-    pickle.dump(builder, f)
+if not args.quiet:
+    model.summary()
+    embedding_layer = model.get_layer("token_embeddings")
+    print(f"Vocabulary size: {embedding_layer.input_dim}")
+
+builder.save(model)

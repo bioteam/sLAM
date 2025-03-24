@@ -1,14 +1,14 @@
 import tensorflow as tf
 import numpy as np
+import glob
 import os
 import random
 import sys
+import time
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
-
-# import tensorflow_text as tf_text  # type: ignore
 
 
 class slam_builder:
@@ -20,7 +20,8 @@ class slam_builder:
 
     def __init__(
         self,
-        verbose: bool = False,
+        quiet: bool = False,
+        name: str = None,
         vocab_size: int = 10000,
         context_size: int = 256,
         d_model: int = 256,
@@ -31,7 +32,8 @@ class slam_builder:
         epochs: int = 3,
         batch_size: int = 4,
     ):
-        self.verbose = verbose
+        self.quiet = quiet
+        self.name = name
         self.vocab_size = vocab_size
         self.context_size = context_size
         self.d_model = d_model
@@ -103,7 +105,7 @@ class slam_builder:
         30,000	    7.68M	                7.68M	                15.36M
         50,000	    12.8M	                12.8M	                25.6M
 
-        The context_size parameter (also commonly called "sequence length" or "context window")
+        The context_size parameter (also called "sequence length" or "context window")
         defines the maximum number of tokens that the model can process or generate at once.
         It represents the "memory" of the model –how much previous text the model can consider
         when generating the next token.
@@ -117,7 +119,8 @@ class slam_builder:
         - The dimensionality of the positional embeddings - how position information is encoded
         - The width of the attention layers - the size of the keys, queries, and values in the attention mechanism
         - The dimensionality throughout most of the model's internal representations
-        - In the provided code, d_model is set to 256 by default (vector with 256 floats), which is small
+
+        In this code d_model is set to 256 by default (vector with 256 floats), which is small
         compared to larger models like GPT-2 (which uses 768 in its smallest version).
         """
         # Input tokens and positional embeddings
@@ -139,6 +142,50 @@ class slam_builder:
             output_dim=self.d_model,
             name="position_embeddings",
         )(positions)
+
+        """
+        Token Embedding vs. Positional Embedding
+        Both are critical components in transformer-based models, but they serve different purposes:
+
+        Token Embedding
+        Purpose: Represents the semantic meaning of each token in the vocabulary.
+
+        Characteristics:
+
+        Converts tokens (words/subwords) into dense vector representations
+        Captures semantic relationships between tokens
+        Same token gets the same embedding regardless of position
+        Learned during training to encode meaning and context
+        Dimension typically ranges from 128 to 1024
+        Example: The word "bank" would have a single token embedding that tries to capture its 
+        meaning, regardless of where it appears in a sentence.
+
+        Positional Embedding
+        Purpose: Encodes the position/location of each token in the sequence.
+
+        Characteristics:
+
+        Provides information about token order in the sequence
+        Necessary because transformer attention mechanisms have no inherent notion of order
+        Can be learned or fixed (using mathematical functions)
+        Allows the model to understand concepts like word order, syntax, and proximity
+        Has the same dimension as token embeddings to allow addition
+        Example: The word "bank" would get a different positional embedding when it appears as the 
+        1st word versus when it appears as the 5th word.
+
+        How They Work Together In Transformer Models:
+
+        Each token is converted to a token embedding
+        A positional embedding corresponding to the token's position is added
+        The result is the input representation: Input = Token Embedding + Positional Embedding
+        This combined embedding allows the model to process both:
+
+        What the token means (token embedding)
+        Where the token is located (positional embedding)
+        Without positional embeddings, a transformer would treat "The dog chased the cat" and 
+        "The cat chased the dog" as equivalent, since it would only see the same set of tokens 
+        without position information.
+        """
 
         # Make positional encodings broadcastable to batch dimension
         position_embeddings = tf.expand_dims(
@@ -164,11 +211,11 @@ class slam_builder:
         return model
 
     # Create a simple tokenizer
-    def create_simple_tokenizer(self):
+    def create_tokenizer(self):
         """Creates a simple WordPiece tokenizer."""
-        if self.verbose:
+        if not self.quiet:
             print(
-                "Create a simple tokenizer (tf.keras.preprocessing.text.Tokenizer) with an estimated vocabulary size"
+                "create_tokenizer(): makie a simple tokenizer (tf.keras.preprocessing.text.Tokenizer) with an estimated vocabulary size"
             )
         vocab_size = min(self.vocab_size, 30000)  # Limit vocab for efficiency
 
@@ -191,13 +238,13 @@ class slam_builder:
         """
         fit_on_texts():
         1. It scans through all the texts you provide
-        2. It builds a word index dictionary (mapping words to integers)
+        2. It builds a word index dictionary (mapping words to integers
         3. It computes word frequencies and other metadata
         4. It doesn't return tokenized sequences - it just prepares the tokenizer
         """
-        if self.verbose:
+        if not self.quiet:
             print(
-                "Running fit() to create word-to-int and int-to-word indices based on input text"
+                "fit(): create word-to-int and int-to-word indices and calculate word frequencies and other metadata"
             )
         self.tokenizer.fit_on_texts(texts)
 
@@ -206,56 +253,56 @@ class slam_builder:
         # Padding token
         word_index["<PAD>"] = 0
         # Beginning of sequence
-        word_index["<BOS>"] = len(self.word_index) + 1
+        word_index["<BOS>"] = len(word_index) + 1
         # End of sequence
-        word_index["<EOS>"] = len(self.word_index) + 1
+        word_index["<EOS>"] = len(word_index) + 1
 
         # Reverse the word index for decoding
-        self.index_word = {v: k for k, v in word_index.items()}
+        # self.index_word = {v: k for k, v in word_index.items()}
 
         # Adjust vocab_size to actual vocabulary size
-        self.vocab_size = len(self.word_index) + 1
-        if self.verbose:
-            print(f"Actual vocabulary size: {self.vocab_size}")
+        self.vocab_size = len(word_index) + 1
+        if not self.quiet:
+            print(f"fit(): actual vocabulary size is {self.vocab_size}")
 
-    def load_text(self, file_paths):
-        if self.verbose:
+    def load_text(self, input_dir, percentage):
+        text = ""
+        if not self.quiet:
+            print("load_text(): read input text files and return 1 string")
+        file_paths = glob.glob(f"{input_dir}/*")
+        if percentage != 100:
+            if percentage > 100:
+                sys.exit("Invalid percentage: {percentage}")
+            num_files = int(len(file_paths) * percentage / 100)
+            file_paths = random.sample(file_paths, num_files)
+
+        if not self.quiet:
             print(
-                "Running load_text() to read text files and return one string"
+                f"load_text(): using {percentage}% of files in {input_dir} for the dataset"
             )
-        all_text = ""
         for file_path in file_paths:
             with open(file_path, "r", encoding="utf-8") as f:
-                all_text += f.read() + "\n\n"
-        return all_text
+                text += f.read() + "\n\n"
 
-    # Function to prepare the dataset
+        return text
 
-    def prepare_dataset(self, text, percentage):
+    def prepare_dataset(self, text):
         """
         Converts text to sequences of integers which are token
         ids that correspond to the indices in word_index.
         """
-        if self.verbose:
+        if not self.quiet:
             print(
-                "Running prepare_dataset() to tokenize, prepare input and target tokens, and create a tf.data.Dataset.from_tensor_slices"
+                "prepare_dataset(): tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices"
             )
-        if percentage != 100:
-            if percentage > 100:
-                sys.exit("Invalid percentage: {percentage}")
-            if self.verbose:
-                print(
-                    f"Using {percentage} percent of input text in the dataset"
-                )
-            text_array = text.split("\n\n")
-            num_elements = int(len(text_array) * percentage / 100)
-            random_selection = random.sample(text_array, num_elements)
-            text = "\n\n".join(random_selection)
 
         token_ids = self.tokenizer.texts_to_sequences([text])[0]
-        # Create examples with context_size + 1 (inputs and targets)
+        self.num_tokens = len(token_ids)
+        if not self.quiet:
+            print(f"prepare_dataset(): number of tokens is{self.num_tokens}")
+        """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
-        for i in range(0, len(token_ids) - self.context_size):
+        for i in range(0, self.num_tokens - self.context_size):
             examples.append(token_ids[i : i + self.context_size + 1])
         examples = np.array(examples)
 
@@ -290,20 +337,111 @@ class slam_builder:
         learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
     ):
+        """train_model
+
+        Train the model
+
+        Parameters
+        ----------
+        train_dataset : _type_
+            _description_
+        model : _type_
+            _description_
+        learning_rate : _type_, optional
+            _description_, by default 5e-5
+        checkpoint_dir : str, optional
+            _description_, by default "./checkpoints"
+
+        Total Parameters
+        The total number of weights and biases in the entire model. This represents the complete set of values that define the model's behavior and what it has learned.
+
+        Trainable Parameters
+        These are parameters that are updated during the training process through backpropagation and gradient descent. They're the parts of the model that "learn" from the training data. Most parameters in a typical neural network are trainable.
+
+        Non-Trainable Parameters
+        These parameters are not updated during training. They remain fixed at their initial values or at values they were set to previously. Non-trainable parameters can come from:
+
+        Layers that are explicitly frozen (set to non-trainable) during transfer learning
+        Batch normalization statistics (moving means and variances) that are updated during training but not through backpropagation
+        Embedding layers that are set to non-trainable (like when using pre-trained word embeddings)
+        Parameters in layers where training is disabled
+
+        An epoch represents one complete pass through the entire training dataset. Within each epoch, the training data is processed in smaller batches, with each batch being a "step."
+
+        Steps in Each Epoch
+        Forward Pass: For each batch, the model makes predictions based on current parameters
+        Loss Calculation: The error/loss between predictions and actual values is computed
+        Backward Pass (Backpropagation): Gradients are calculated to determine how to adjust parameters
+        Parameter Update: Weights and biases are updated according to the optimizer's rules
+        Metrics Tracking: Performance metrics are updated (accuracy, loss, etc.)
+        Repeat: Steps 1-5 are repeated for each batch until the full dataset is processed
+        Validation (optional): After all training batches, the model is evaluated on validation data
+
+        How the Number of Steps is Determined
+        The number of steps per epoch is calculated using this formula:
+
+        steps_per_epoch = ceil(total_training_samples / batch_size)
+
+        For example:
+
+        If you have 10,000 training samples and a batch size of 32
+        Steps per epoch = ceil(10,000 / 32) = 313 steps
+        Factors affecting the number of steps:
+
+        Dataset size: Larger datasets require more steps
+        Batch size: Smaller batches mean more steps per epoch
+        Data handling: When using data generators or tf.data pipelines, steps may be explicitly set
+        Distributed training: With multiple GPUs/TPUs, effective batch size increases, reducing steps
+        In frameworks like TensorFlow/Keras, you can either:
+
+        Let the framework calculate steps automatically when providing a NumPy array
+        Specify steps_per_epoch manually when using generators or tf.data
+
+        "Samples" in the Context of a GPT-2 Style LLM
+        In the context of training GPT-2 style language models, "samples" has a specific meaning that differs from some other machine learning contexts:
+
+        What Constitutes a Sample in LLM Training
+        For GPT-2 style models:
+
+        A sample is typically a sequence of tokens of a specific length (e.g., 512 or 1024 tokens)
+        These sequences are often extracted from a larger corpus of text
+        Each sample serves as a training example for the model to learn from
+        Important Characteristics
+        Sequence-based: Unlike image classification where one image = one sample, LLM samples are sequences of tokens
+
+        Context window: The sample length is determined by the model's context window (maximum sequence length)
+
+        Sliding windows: Samples may be created using sliding windows over text, potentially with overlap
+
+        Batching: Multiple samples are grouped into batches for efficient processing
+
+        Tokenization: Raw text must be tokenized before becoming samples
+
+        Example
+        If training a GPT-2 model with a context length of 512:
+
+        A book might be tokenized into 50,000 tokens
+        This could be divided into ~98 samples of 512 tokens each
+        These samples become the training examples
+        So when calculating steps per epoch:
+
+        steps_per_epoch = ceil(number_of_sequences / batch_size)
+
+        Where "number_of_sequences" is how many of these fixed-length token sequences you have in your training dataset.
+        """
+
         # Create checkpoint directory
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        # Learning rate schedule
+        """Learning rate schedule"""
         lr_schedule = PolynomialDecay(
             initial_learning_rate=learning_rate,
             end_learning_rate=learning_rate / 10,
             decay_steps=self.epochs * len(train_dataset),
         )
 
-        # Optimizer
         optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
 
-        # Checkpoint callback
         checkpoint_prefix = os.path.join(
             checkpoint_dir, "ckpt_{epoch}.weights.h5"
         )
@@ -311,10 +449,9 @@ class slam_builder:
             filepath=checkpoint_prefix, save_weights_only=True
         )
 
-        # For a GPT-2 style language model
+        """For a GPT-2 style language model. This handles the logits properly for a LM"""
         model.compile(
             optimizer=optimizer,
-            # This handles the logits properly for a language model
             loss=tf.keras.losses.SparseCategoricalCrossentropy(
                 from_logits=True
             ),
@@ -326,30 +463,89 @@ class slam_builder:
             train_dataset, epochs=self.epochs, callbacks=[checkpoint_callback]
         )
 
+    def save(self, model):
+        """Use a timestamp if there's no name"""
+        if not self.name:
+            self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
+        if not self.quiet:
+            print(
+                f"save(): saving Keras model ({self.name}.keras) and JSON file ({self.name}.json) with int-to-word decoding and metadata"
+            )
+        """In Tensorflow the tokenizer is not saved with the model, they must be saved separately"""
+        model.save(f"{self.name}.keras")
+        tokenizer_json = self.tokenizer.to_json()
+        with open(f"{self.name}.json", "w", encoding="utf-8") as f:
+            f.write(tokenizer_json)
+
+
+class slam_generator:
+    def __init__(self, name):
+        self.name = name
+        if not os.path.exists(f"{self.name}.json"):
+            sys.exit(f"Tokenizer JSON file not found: {self.name}.json")
+        with open(f"{self.name}.json", "r", encoding="utf-8") as f:
+            tokenizer_json = f.read()
+            self.tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(
+                tokenizer_json
+            )
+        if not os.path.exists(f"{self.name}.keras"):
+            sys.exit(f"Model file not found: {self.name}.keras")
+        self.model = tf.keras.models.load_model(f"{self.name}.keras")
+
+        self.index_word = {
+            index: word for word, index in self.tokenizer.word_index.items()
+        }
+        # Add padding token if it exists in your tokenizer setup
+        self.index_word[0] = ""  # Often 0 is reserved for padding
+
+    # 4. Function to convert a single ID to a word
+    def id_to_word(self, token_id):
+        return self.index_word.get(
+            token_id, ""
+        )  # Return empty string if ID not found
+
     # Function to generate text
     def generate_text(
         self,
-        model,
         prompt,
         max_length=100,
         temperature=0.7,
     ):
-        # Tokenize seed text
+        # embedding_layer = self.model.get_layer("token_embeddings")
+
+        """
+        When an LLM encounters words/tokens not in its vocabulary during generation, several
+        mechanisms come into play.
+
+        Tokenization Breakdown
+
+        Most modern LLMs use subword tokenization (BPE, WordPiece, SentencePiece)
+        Unknown words get split into known subword units when possible
+        Example: "cryptocurrency" might become ["crypto", "##curr", "##ency"]
+
+        Special Unknown Token:
+
+        If a word can't be broken into known subwords, it's replaced with a special
+        token like <unk>, [UNK], or <unknown> depending on the tokenizer.
+        """
+
+        # self.tokenizer = tf.keras.preprocessing.text.Tokenizer(
+        #     num_words=embedding_layer.input_dim, oov_token="<UNK>"
+        # )
         input_ids = self.tokenizer.texts_to_sequences([prompt])[0]
 
         # Truncate or pad if necessary
-        context_size = model.inputs[0].shape[1]
+        context_size = self.model.inputs[0].shape[1]
         if len(input_ids) > context_size:
             input_ids = input_ids[-context_size:]
         else:
             input_ids = [0] * (context_size - len(input_ids)) + input_ids
 
-        generated_text = prompt
         input_ids = np.array([input_ids])
 
-        # Generate text token by token
+        """Generate text token by token"""
         for _ in range(max_length):
-            predictions = model.predict(input_ids, verbose=0)[0]
+            predictions = self.model.predict(input_ids, verbose=0)[0]
 
             # Get the predictions for the last token
             predictions = predictions[-1] / temperature
@@ -362,12 +558,12 @@ class slam_builder:
             input_ids[0, -1] = predicted_id
 
             # Convert token to word and add to generated text
-            if predicted_id in self.index_word:
-                word = self.index_word[predicted_id]
-                generated_text += " " + word
+            # if predicted_id in self.index_word:
+            word = self.id_to_word(predicted_id)
+            prompt += " " + word
 
-                # Stop if we generate an end token
-                if word == "<EOS>":
-                    break
+            # Stop if we generate an end token
+            if word == "<EOS>":
+                break
 
-        return generated_text
+        return prompt
