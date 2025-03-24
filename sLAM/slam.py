@@ -217,7 +217,6 @@ class slam_builder:
             print(
                 "create_tokenizer(): makie a simple tokenizer (tf.keras.preprocessing.text.Tokenizer) with an estimated vocabulary size"
             )
-        vocab_size = min(self.vocab_size, 30000)  # Limit vocab for efficiency
 
         # bert_tokenizer = tf_text.BertTokenizer(
         #     vocab_lookup_table=None,
@@ -231,7 +230,9 @@ class slam_builder:
 
         # A simpler tokenizer:
         self.tokenizer = tf.keras.preprocessing.text.Tokenizer(
-            num_words=vocab_size, oov_token="<UNK>"
+            num_words=self.vocab_size,
+            oov_token="<UNK>",  # Unknown token
+            filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
         )
 
     def fit(self, texts):
@@ -248,20 +249,21 @@ class slam_builder:
             )
         self.tokenizer.fit_on_texts(texts)
 
-        # Add special tokens
+        # After fitting, add special tokens to the word index properly
         word_index = self.tokenizer.word_index
-        # Padding token
-        word_index["<PAD>"] = 0
-        # Beginning of sequence
-        word_index["<BOS>"] = len(word_index) + 1
-        # End of sequence
-        word_index["<EOS>"] = len(word_index) + 1
+        # Get the next available index
+        next_index = len(word_index) + 1
 
-        # Reverse the word index for decoding
-        # self.index_word = {v: k for k, v in word_index.items()}
+        # Add special tokens
+        self.tokenizer.word_index["<PAD>"] = 0  # Usually reserved for padding
+        self.tokenizer.word_index["<BOS>"] = next_index
+        self.tokenizer.index_word[next_index] = "<BOS>"
+        next_index += 1
+        self.tokenizer.word_index["<EOS>"] = next_index
+        self.tokenizer.index_word[next_index] = "<EOS>"
 
-        # Adjust vocab_size to actual vocabulary size
-        self.vocab_size = len(word_index) + 1
+        # Update vocabulary size
+        self.vocab_size = next_index + 1
         if not self.quiet:
             print(f"fit(): actual vocabulary size is {self.vocab_size}")
 
@@ -299,7 +301,7 @@ class slam_builder:
         token_ids = self.tokenizer.texts_to_sequences([text])[0]
         self.num_tokens = len(token_ids)
         if not self.quiet:
-            print(f"prepare_dataset(): number of tokens is{self.num_tokens}")
+            print(f"prepare_dataset(): number of tokens is {self.num_tokens}")
         """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
         for i in range(0, self.num_tokens - self.context_size):
@@ -496,7 +498,23 @@ class slam_generator:
             index: word for word, index in self.tokenizer.word_index.items()
         }
         # Add padding token if it exists in your tokenizer setup
-        self.index_word[0] = ""  # Often 0 is reserved for padding
+        # self.index_word[0] = ""  # Often 0 is reserved for padding
+
+        # Check tokenizer vocabulary size
+        import json
+
+        tokenizer_config = json.loads(tokenizer_json)
+        print(
+            f"Vocabulary size: {tokenizer_config.get('config', {}).get('num_words', len(tokenizer_config.get('word_index', {})))}"
+        )
+        print(
+            f"Sample tokens: {list(tokenizer_config.get('word_index', {}).items())[:10]}"
+        )
+
+        # Verify the ID for <UNK> token
+        print(
+            f"<UNK> token id: {tokenizer_config.get('word_index', {}).get('<UNK>', 'Not found')}"
+        )
 
     # 4. Function to convert a single ID to a word
     def id_to_word(self, token_id):
@@ -567,3 +585,115 @@ class slam_generator:
                 break
 
         return prompt
+
+
+""" 
+        
+TensorFlow's SubwordTextEncoder is part of the tensorflow_text and tensorflow_datasets packages. It creates a subword vocabulary that can handle out-of-vocabulary words effectively. Here's how to use it:
+
+import tensorflow as tf
+import tensorflow_datasets as tfds
+
+class SLAMWithSubwordTokenizer:
+    def __init__(self, vocab_size=8000, quiet=False):
+        self.vocab_size = vocab_size
+        self.quiet = quiet
+        self.tokenizer = None
+        
+    def fit(self, texts):
+        if not self.quiet:
+            print(f"Building subword tokenizer with target vocab size: {self.vocab_size}")
+        
+        # Create a subword tokenizer
+        self.tokenizer = tfds.features.text.SubwordTextEncoder.build_from_corpus(
+            corpus_iterator=texts,
+            target_vocab_size=self.vocab_size,
+            max_subword_length=20,  # Maximum length for subwords
+            reserved_tokens=["<PAD>", "<BOS>", "<EOS>", "<UNK>"]
+        )
+        
+        # The actual vocabulary size might differ from requested
+        self.vocab_size = self.tokenizer.vocab_size
+        
+        if not self.quiet:
+            print(f"Actual vocabulary size: {self.vocab_size}")
+            print(f"Sample tokens: {self.tokenizer.subwords[:10]}")
+        
+        return self
+    
+    def encode(self, texts, add_special_tokens=True):
+        if not isinstance(texts, list):
+            texts = [texts]
+            
+        encoded = []
+        for text in texts:
+            # Encode the text to subword IDs
+            tokens = self.tokenizer.encode(text)
+            
+            # Add special tokens if requested
+            if add_special_tokens:
+                bos_id = self.tokenizer.vocab_size - 3  # <BOS> index
+                eos_id = self.tokenizer.vocab_size - 2  # <EOS> index
+                tokens = [bos_id] + tokens + [eos_id]
+                
+            encoded.append(tokens)
+            
+        return encoded
+    
+    def decode(self, sequences):
+        if not isinstance(sequences, list):
+            sequences = [sequences]
+            
+        decoded = []
+        for seq in sequences:
+            # Remove special tokens if present (simple approach)
+            tokens = [t for t in seq if t < self.tokenizer.vocab_size - 4]  # Exclude special tokens
+            
+            # Decode back to text
+            text = self.tokenizer.decode(tokens)
+            decoded.append(text)
+            
+        return decoded if len(decoded) > 1 else decoded[0]
+    
+    def save(self, filename):
+        self.tokenizer.save_to_file(filename)
+        if not self.quiet:
+            print(f"Tokenizer saved to {filename}")
+    
+    def load(self, filename):
+        self.tokenizer = tfds.features.text.SubwordTextEncoder.load_from_file(filename)
+        self.vocab_size = self.tokenizer.vocab_size
+        if not self.quiet:
+            print(f"Loaded tokenizer with vocab size: {self.vocab_size}")
+        return self
+
+
+# Example usage
+if __name__ == "__main__":
+    # Sample texts
+    texts = [
+        "This is a sample sentence.",
+        "Another example with different words.",
+        "Subword tokenization handles unknown words better.",
+        "Words like 'tokenization' are split into smaller parts."
+    ]
+    
+    # Create and fit the tokenizer
+    tokenizer = SLAMWithSubwordTokenizer(vocab_size=100)
+    tokenizer.fit(texts)
+    
+    # Encode some text
+    encoded = tokenizer.encode("This is a new example.")
+    print(f"Encoded: {encoded}")
+    
+    # Decode back to text
+    decoded = tokenizer.decode(encoded)
+    print(f"Decoded: {decoded}")
+    
+    # Save and load
+    tokenizer.save("my_subword_tokenizer")
+    new_tokenizer = SLAMWithSubwordTokenizer()
+    new_tokenizer.load("my_subword_tokenizer")
+
+
+"""
