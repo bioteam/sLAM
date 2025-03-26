@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only Small LAnguage Model that can be built using personal computing. A utility script is included that downloads GitHub READMEs for input.
+Demonstration code to create a GPT-2-style, decoder-only small LAnguage Model that can be built using personal computing.
 
 ## Installation
 
@@ -10,34 +10,24 @@ cd sLAM
 pip3 install .
 ```
 
+Complete the installation:
+
+```sh
+>python3
+>>> import nltk
+>>> nltk.download('punkt_tab')
+```
+
 ## Usage
 
-### Gather some GitHub README files
-
-Use READMEs as input or use your own text documents.
-
-Gathering GitHub READMEs requires a GitHub API key: Settings -> Developer Settings -> Personal access tokens -> Tokens (classic).
-
-Then:
-
-```sh
-export GITHUB_API_KEY=abcdefghijklmnopqrstuvwxyz
-```
-
-Customize the queries in the *get-readmes.py* script.
-
-```sh
-python3 sLAM/get-readmes.py 
-```
-
-Or use your own text documents collected in one directory.
+The code uses *wikitext-2-v1* from Hugging Face as training text.
 
 ### Create a model
 
-Specify the documents directory and make a model.
+Supply a prompt:
 
 ```sh
-python3 sLAM/make-slam.py -d github_readmes/
+python3 sLAM/make-slam.py -p "I am testing a language model"
 ```
 
 ### Query the model
