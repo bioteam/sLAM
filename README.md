@@ -20,6 +20,7 @@ Complete the installation:
 
 ## Usage
 
+```sh
 usage: make-slam.py [-h] [-i INPUT_DIR] [-d] [-t TEXT_PERCENTAGE] [-n NAME] [--temperature TEMPERATURE] -p PROMPT [-v]
 
 options:
@@ -35,6 +36,7 @@ options:
   -p PROMPT, --prompt PROMPT
                         Prompt
   -v, --verbose         Verbose
+```
 
 The code uses *wikitext-2-v1* from Hugging Face as training text if *-d* is specified.
 
