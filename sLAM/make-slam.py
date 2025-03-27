@@ -48,7 +48,7 @@ else:
 
 builder.create_tokenizer()
 
-builder.fit(texts)
+builder.adapt(texts)
 
 dataset = builder.prepare_dataset(texts)
 

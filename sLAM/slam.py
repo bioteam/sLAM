@@ -220,24 +220,22 @@ class slam_builder:
                 "create_tokenizer(): make a simple tokenizer (tf.keras.layers.TextVectorization) with an estimated vocabulary size"
             )
 
-        # bert_tokenizer = tf_text.BertTokenizer(
-        #     vocab_lookup_table=None,
-        #     suffix_indicator="##",
-        #     max_bytes_per_word=100,
-        #     max_chars_per_token=None,
-        #     token_out_type=tf.int64,
-        #     unknown_token="[UNK]",
-        #     split_unknown_characters=False,
-        # )
-
         self.tokenizer = tf.keras.layers.TextVectorization(
             max_tokens=50000,
             output_mode="int",
             output_sequence_length=self.context_size + 1,
         )
-
-    def fit(self, texts):
         """
+        The +1 allows the tokenizer to include the target token in the sequence. When training the model, 
+        you use the first context_size tokens as the input and the last context_size tokens as the target
+        """
+
+    def adapt(self, texts):
+        """adapt run adapt() and make a token id/token dictionary
+
+        Arguments:
+            texts -- list of strings
+
         >>> import tensorflow as tf
         >>> texts = ["I love machine learning", "Machine learning is fun"]
         >>> vectorizer = tf.keras.layers.TextVectorization()
@@ -261,6 +259,15 @@ class slam_builder:
         self.num_tokens = len(self.token_ids)
 
     def load_text(self, input_dir, percentage):
+        """load_text read input files from a directory
+
+        Arguments:
+            input_dir -- input directory with text files
+            percentage -- percentage of strings to return
+
+        Returns:
+            list of strings
+        """
         text = ""
         if self.verbose:
             print("load_text(): read input text files and return 1 string")
@@ -282,7 +289,14 @@ class slam_builder:
         return text
 
     def prepare_dataset(self, texts):
-        """
+        """prepare_dataset
+
+        Arguments:
+            texts -- list of strings
+
+        Returns:
+            tf.data.Dataset.from_tensor_slices
+
         Converts text to sequences of integers which are token
         ids that correspond to the indices in word_index.
         """
@@ -303,8 +317,8 @@ class slam_builder:
         Take all tokens except the last one from each example sequence.
         For example, if we have a sequence of tokens [3, 5, 55, 4, 66]:
 
-        The input would be  [3, 5, 55, 4]
-        The target would be [ 5, 55, 4, 66]
+        The input sequence would be  [3, 5, 55, 4]
+        The target sequence would be [ 5, 55, 4, 66]
         """
         inputs = examples[:, :-1]  # tensor 1
         """
@@ -330,20 +344,15 @@ class slam_builder:
         learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
     ):
-        """train_model
+        """train_model Set up optimizer, checkpoints, compile(), and run model.fit()
 
-        Train the model
+        Arguments:
+            train_dataset -- tf.data.Dataset.from_tensor_slices
+            model -- keras.src.models.functional.Functional, untrained
 
-        Parameters
-        ----------
-        train_dataset : _type_
-            _description_
-        model : _type_
-            _description_
-        learning_rate : _type_, optional
-            _description_, by default 5e-5
-        checkpoint_dir : str, optional
-            _description_, by default "./checkpoints"
+        Keyword Arguments:
+            learning_rate -- learning rate (default: {5e-5})
+            checkpoint_dir -- checkpoint directory (default: {"./checkpoints"})
 
         Total Parameters
 
@@ -480,6 +489,11 @@ class slam_builder:
         )
 
     def save(self, model):
+        """save save model and vocabulary JSON file
+
+        Arguments:
+            model -- trained model
+        """
         """Use a timestamp if there's no name"""
         if not self.name:
             self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
