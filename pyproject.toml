@@ -1,11 +1,16 @@
 [tool.poetry]
 name = "sLAM"
-version = "1.0"
+version = "0.1"
 description = "Code to create a GPT-2-style small LAnguage Model"
 authors = ["Brian Osborne <bosborne@alum.mit.edu>"]
 readme = "README.md"
 packages = [{ include = "sLAM" }]
-include = ["sLAM/make-slam.py", "sLAM/get-readmes.py", "sLAM/run-slam.py"]
+include = [
+    "sLAM/make-slam.py",
+    "sLAM/get-readmes.py",
+    "sLAM/generate.py",
+    "sLAM/slam.py",
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -13,6 +18,8 @@ tqdm = "*"
 numpy = "*"
 tensorflow = ">=2.8.2"
 keras = ">=2.8.0"
+datasets = '*'
+nltk = '*'
 
 [build-system]
 requires = ["poetry-core"]

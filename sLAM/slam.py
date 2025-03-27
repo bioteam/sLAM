@@ -5,6 +5,8 @@ import os
 import random
 import sys
 import time
+import json
+import nltk
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
@@ -20,19 +22,19 @@ class slam_builder:
 
     def __init__(
         self,
-        quiet: bool = False,
+        verbose: bool = False,
         name: str = None,
-        vocab_size: int = 10000,
+        vocab_size: int = 50000,
         context_size: int = 256,
         d_model: int = 256,
         n_layers: int = 4,
         n_heads: int = 4,
         d_ff: int = 1024,
         dropout_rate: float = 0.1,
-        epochs: int = 3,
+        epochs: int = 1,
         batch_size: int = 4,
     ):
-        self.quiet = quiet
+        self.verbose = verbose
         self.name = name
         self.vocab_size = vocab_size
         self.context_size = context_size
@@ -213,9 +215,9 @@ class slam_builder:
     # Create a simple tokenizer
     def create_tokenizer(self):
         """Creates a simple WordPiece tokenizer."""
-        if not self.quiet:
+        if self.verbose:
             print(
-                "create_tokenizer(): makie a simple tokenizer (tf.keras.preprocessing.text.Tokenizer) with an estimated vocabulary size"
+                "create_tokenizer(): make a simple tokenizer (tf.keras.layers.TextVectorization) with an estimated vocabulary size"
             )
 
         # bert_tokenizer = tf_text.BertTokenizer(
@@ -228,48 +230,39 @@ class slam_builder:
         #     split_unknown_characters=False,
         # )
 
-        # A simpler tokenizer:
-        self.tokenizer = tf.keras.preprocessing.text.Tokenizer(
-            num_words=self.vocab_size,
-            oov_token="<UNK>",  # Unknown token
-            filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
+        self.tokenizer = tf.keras.layers.TextVectorization(
+            max_tokens=50000,
+            output_mode="int",
+            output_sequence_length=self.context_size + 1,
         )
 
     def fit(self, texts):
         """
-        fit_on_texts():
-        1. It scans through all the texts you provide
-        2. It builds a word index dictionary (mapping words to integers
-        3. It computes word frequencies and other metadata
-        4. It doesn't return tokenized sequences - it just prepares the tokenizer
+        >>> import tensorflow as tf
+        >>> texts = ["I love machine learning", "Machine learning is fun"]
+        >>> vectorizer = tf.keras.layers.TextVectorization()
+        >>> vectorizer.adapt(texts)
+        >>> sequences = vectorizer(texts)
+        >>> print(sequences)
+        tf.Tensor(
+        [[6 4 2 3]
+        [2 3 5 7]], shape=(2, 4), dtype=int64)
+        >>> vectorizer.get_vocabulary()
+        ['', '[UNK]', 'machine', 'learning', 'love', 'is', 'i', 'fun']
         """
-        if not self.quiet:
-            print(
-                "fit(): create word-to-int and int-to-word indices and calculate word frequencies and other metadata"
-            )
-        self.tokenizer.fit_on_texts(texts)
 
-        # After fitting, add special tokens to the word index properly
-        word_index = self.tokenizer.word_index
-        # Get the next available index
-        next_index = len(word_index) + 1
+        self.tokenizer.adapt(texts)
 
-        # Add special tokens
-        self.tokenizer.word_index["<PAD>"] = 0  # Usually reserved for padding
-        self.tokenizer.word_index["<BOS>"] = next_index
-        self.tokenizer.index_word[next_index] = "<BOS>"
-        next_index += 1
-        self.tokenizer.word_index["<EOS>"] = next_index
-        self.tokenizer.index_word[next_index] = "<EOS>"
-
-        # Update vocabulary size
-        self.vocab_size = next_index + 1
-        if not self.quiet:
-            print(f"fit(): actual vocabulary size is {self.vocab_size}")
+        self.index_word = {
+            index: word
+            for index, word in enumerate(self.tokenizer.get_vocabulary())
+        }
+        self.token_ids = sorted(self.index_word.keys())
+        self.num_tokens = len(self.token_ids)
 
     def load_text(self, input_dir, percentage):
         text = ""
-        if not self.quiet:
+        if self.verbose:
             print("load_text(): read input text files and return 1 string")
         file_paths = glob.glob(f"{input_dir}/*")
         if percentage != 100:
@@ -278,7 +271,7 @@ class slam_builder:
             num_files = int(len(file_paths) * percentage / 100)
             file_paths = random.sample(file_paths, num_files)
 
-        if not self.quiet:
+        if self.verbose:
             print(
                 f"load_text(): using {percentage}% of files in {input_dir} for the dataset"
             )
@@ -288,32 +281,30 @@ class slam_builder:
 
         return text
 
-    def prepare_dataset(self, text):
+    def prepare_dataset(self, texts):
         """
         Converts text to sequences of integers which are token
         ids that correspond to the indices in word_index.
         """
-        if not self.quiet:
+        if self.verbose:
             print(
                 "prepare_dataset(): tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices"
             )
 
-        token_ids = self.tokenizer.texts_to_sequences([text])[0]
-        self.num_tokens = len(token_ids)
-        if not self.quiet:
+        if self.verbose:
             print(f"prepare_dataset(): number of tokens is {self.num_tokens}")
         """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
-        for i in range(0, self.num_tokens - self.context_size):
-            examples.append(token_ids[i : i + self.context_size + 1])
+        for i in range(0, len(self.token_ids) - self.context_size):
+            examples.append(self.token_ids[i : i + self.context_size + 1])
         examples = np.array(examples)
 
         """
         Take all tokens except the last one from each example sequence.
-        For example, if we have a sequence of tokens [A, B, C, D, E]:
+        For example, if we have a sequence of tokens [3, 5, 55, 4, 66]:
 
-        The input would be [A, B, C, D]
-        The target would be [B, C, D, E]
+        The input would be  [3, 5, 55, 4]
+        The target would be [ 5, 55, 4, 66]
         """
         inputs = examples[:, :-1]  # tensor 1
         """
@@ -355,22 +346,32 @@ class slam_builder:
             _description_, by default "./checkpoints"
 
         Total Parameters
-        The total number of weights and biases in the entire model. This represents the complete set of values that define the model's behavior and what it has learned.
+
+        The total number of weights and biases in the entire model. This represents the complete set of
+        values that define the model's behavior and what it has learned.
 
         Trainable Parameters
-        These are parameters that are updated during the training process through backpropagation and gradient descent. They're the parts of the model that "learn" from the training data. Most parameters in a typical neural network are trainable.
+
+        These are parameters that are updated during the training process through backpropagation and
+        gradient descent. They're the parts of the model that "learn" from the training data. Most
+        parameters in a typical neural network are trainable.
 
         Non-Trainable Parameters
-        These parameters are not updated during training. They remain fixed at their initial values or at values they were set to previously. Non-trainable parameters can come from:
+
+        These parameters are not updated during training. They remain fixed at their initial values or
+        at values they were set to previously. Non-trainable parameters can come from:
 
         Layers that are explicitly frozen (set to non-trainable) during transfer learning
+
         Batch normalization statistics (moving means and variances) that are updated during training but not through backpropagation
         Embedding layers that are set to non-trainable (like when using pre-trained word embeddings)
         Parameters in layers where training is disabled
 
-        An epoch represents one complete pass through the entire training dataset. Within each epoch, the training data is processed in smaller batches, with each batch being a "step."
+        An epoch represents one complete pass through the entire training dataset. Within each epoch,
+        the training data is processed in smaller batches, with each batch being a "step."
 
         Steps in Each Epoch
+
         Forward Pass: For each batch, the model makes predictions based on current parameters
         Loss Calculation: The error/loss between predictions and actual values is computed
         Backward Pass (Backpropagation): Gradients are calculated to determine how to adjust parameters
@@ -380,6 +381,7 @@ class slam_builder:
         Validation (optional): After all training batches, the model is evaluated on validation data
 
         How the Number of Steps is Determined
+
         The number of steps per epoch is calculated using this formula:
 
         steps_per_epoch = ceil(total_training_samples / batch_size)
@@ -400,15 +402,20 @@ class slam_builder:
         Specify steps_per_epoch manually when using generators or tf.data
 
         "Samples" in the Context of a GPT-2 Style LLM
-        In the context of training GPT-2 style language models, "samples" has a specific meaning that differs from some other machine learning contexts:
+
+        In the context of training GPT-2 style language models, "samples" has a specific meaning
+        that differs from some other machine learning contexts:
 
         What Constitutes a Sample in LLM Training
+
         For GPT-2 style models:
 
         A sample is typically a sequence of tokens of a specific length (e.g., 512 or 1024 tokens)
         These sequences are often extracted from a larger corpus of text
         Each sample serves as a training example for the model to learn from
+
         Important Characteristics
+
         Sequence-based: Unlike image classification where one image = one sample, LLM samples are sequences of tokens
 
         Context window: The sample length is determined by the model's context window (maximum sequence length)
@@ -420,6 +427,7 @@ class slam_builder:
         Tokenization: Raw text must be tokenized before becoming samples
 
         Example
+
         If training a GPT-2 model with a context length of 512:
 
         A book might be tokenized into 50,000 tokens
@@ -451,7 +459,13 @@ class slam_builder:
             filepath=checkpoint_prefix, save_weights_only=True
         )
 
-        """For a GPT-2 style language model. This handles the logits properly for a LM"""
+        """        
+        Logits in neural networks: When your model makes a prediction for the next token in a sequence, 
+        it outputs a vector of real numbers (one for each token in your vocabulary). These raw output values are called "logits".
+
+        Relationship to probabilities: Logits are not probabilities - they can be any real number (positive, negative, or zero). 
+        To convert logits to probabilities, you typically apply a softmax function.
+        """
         model.compile(
             optimizer=optimizer,
             loss=tf.keras.losses.SparseCategoricalCrossentropy(
@@ -469,15 +483,141 @@ class slam_builder:
         """Use a timestamp if there's no name"""
         if not self.name:
             self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
-        if not self.quiet:
-            print(
-                f"save(): saving Keras model ({self.name}.keras) and JSON file ({self.name}.json) with int-to-word decoding and metadata"
-            )
-        """In Tensorflow the tokenizer is not saved with the model, they must be saved separately"""
+        """In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately"""
         model.save(f"{self.name}.keras")
-        tokenizer_json = self.tokenizer.to_json()
+        if self.verbose:
+            print(f"save(): saved Keras model ({self.name}.keras)")
         with open(f"{self.name}.json", "w", encoding="utf-8") as f:
-            f.write(tokenizer_json)
+            f.write(json.dumps(self.index_word))
+        if self.verbose:
+            print(
+                f"save(): saved JSON file ({self.name}.json) with int-to-word decoding and metadata"
+            )
+
+    def id_to_word(self, token_id):
+        return self.index_word.get(
+            token_id, ""
+        )  # Return empty string if ID not found
+
+    # Function to generate text
+    def generate_text(
+        self,
+        model,
+        prompt,
+        max_length: int = 100,
+        temperature=None,
+    ):
+        """
+        Generate text using the trained model
+
+        Args:
+            model:
+            prompt: Initial text prompt to start generation
+            max_length: Maximum length of generated sequence
+            temperature: Controls randomness in generation
+
+        Returns:
+            Generated text as a string
+        """
+
+        """
+        When an LLM encounters words/tokens not in its vocabulary during generation, several
+        mechanisms come into play.
+
+        Tokenization Breakdown
+
+        Most modern LLMs use subword tokenization (BPE, WordPiece, SentencePiece)
+        Unknown words get split into known subword units when possible
+        Example: "cryptocurrency" might become ["crypto", "##curr", "##ency"]
+
+        Special Unknown Token:
+
+        If a word can't be broken into known subwords, it's replaced with a special
+        token like <unk>, [UNK], or <unknown> depending on the tokenizer.
+        """
+
+        prompt_ids = self.tokenizer(tf.convert_to_tensor([prompt]))
+        if self.verbose:
+            print(f"prompt_ids: {prompt_ids}")
+
+        # Truncate or pad if necessary
+        # self.context_size = model.inputs[0].shape[1]
+        prompt_ids = prompt_ids[0]
+        if len(prompt_ids) > self.context_size:
+            prompt_ids = prompt_ids[-self.context_size :]
+        else:
+            prompt_ids = [0] * (
+                self.context_size - len(prompt_ids)
+            ) + prompt_ids
+
+        prompt_ids = np.array(prompt_ids)
+        prompt_ids = prompt_ids.reshape(1, -1)  # Add batch dimension
+
+        """Generate text token by token"""
+        for _ in range(max_length):
+            predictions = model.predict(prompt_ids, verbose=0)[0]
+
+            # Get the predictions for the last token
+            """ 
+            Low temperature (0.1-0.5):
+
+            - More deterministic, predictable outputs
+            - Often more factual and coherent
+            - May become repetitive or generic
+
+            High temperature (0.7-1.5):
+
+            - More diverse and creative outputs
+            - More surprising word choices
+            - May introduce more errors or nonsensical content
+
+            Temperature = 0:
+
+            This is a special case called "greedy decoding" where only the 
+            highest probability token is selected. Always produces the same  
+            output for a given prompt
+
+            Formula: P(token_i) = softmax(logits_i / temperature)
+            """
+            predictions = predictions[-1] / temperature
+            predicted_id = tf.random.categorical(
+                tf.expand_dims(predictions, 0), num_samples=1
+            )[-1, 0].numpy()
+
+            # Update the input ids
+            prompt_ids = np.roll(prompt_ids, -1, axis=1)
+            prompt_ids[0, -1] = predicted_id
+
+            # Convert token to word and add to generated text
+            # if predicted_id in self.index_word:
+            word = self.id_to_word(predicted_id)
+            prompt += " " + word
+
+            # Stop if we generate an end token
+            if word == "<EOS>":
+                break
+
+        return prompt
+
+    def clean_wikitext_2_v1(self, raw_texts, percentage):
+        sentences = list()
+        texts = [t["text"].strip() for t in raw_texts["train"]]
+        texts = [t for t in texts if not t.startswith("=")]
+        for text in texts:
+            for sentence in nltk.sent_tokenize(text):
+                if "<unk>" not in sentence and len(sentence) > 32:
+                    sentences.append(sentence)
+        if percentage != 100:
+            num_sentences = int(len(sentences) * percentage / 100)
+            sentences = random.sample(sentences, num_sentences)
+            if self.verbose:
+                print(
+                    f"clean_wikitext(): using {percentage}% of sentences for the dataset"
+                )
+        if self.verbose:
+            print(f"clean_wikitext(): {len(sentences)} cleaned sentences")
+        """For example: 'As a liquid , xenon has a density of up to 3 @.' """
+        return sentences
 
 
 class slam_generator:
@@ -497,8 +637,6 @@ class slam_generator:
         self.index_word = {
             index: word for word, index in self.tokenizer.word_index.items()
         }
-        # Add padding token if it exists in your tokenizer setup
-        # self.index_word[0] = ""  # Often 0 is reserved for padding
 
         # Check tokenizer vocabulary size
         import json
@@ -521,179 +659,3 @@ class slam_generator:
         return self.index_word.get(
             token_id, ""
         )  # Return empty string if ID not found
-
-    # Function to generate text
-    def generate_text(
-        self,
-        prompt,
-        max_length=100,
-        temperature=0.7,
-    ):
-        # embedding_layer = self.model.get_layer("token_embeddings")
-
-        """
-        When an LLM encounters words/tokens not in its vocabulary during generation, several
-        mechanisms come into play.
-
-        Tokenization Breakdown
-
-        Most modern LLMs use subword tokenization (BPE, WordPiece, SentencePiece)
-        Unknown words get split into known subword units when possible
-        Example: "cryptocurrency" might become ["crypto", "##curr", "##ency"]
-
-        Special Unknown Token:
-
-        If a word can't be broken into known subwords, it's replaced with a special
-        token like <unk>, [UNK], or <unknown> depending on the tokenizer.
-        """
-
-        # self.tokenizer = tf.keras.preprocessing.text.Tokenizer(
-        #     num_words=embedding_layer.input_dim, oov_token="<UNK>"
-        # )
-        input_ids = self.tokenizer.texts_to_sequences([prompt])[0]
-
-        # Truncate or pad if necessary
-        context_size = self.model.inputs[0].shape[1]
-        if len(input_ids) > context_size:
-            input_ids = input_ids[-context_size:]
-        else:
-            input_ids = [0] * (context_size - len(input_ids)) + input_ids
-
-        input_ids = np.array([input_ids])
-
-        """Generate text token by token"""
-        for _ in range(max_length):
-            predictions = self.model.predict(input_ids, verbose=0)[0]
-
-            # Get the predictions for the last token
-            predictions = predictions[-1] / temperature
-            predicted_id = tf.random.categorical(
-                tf.expand_dims(predictions, 0), num_samples=1
-            )[-1, 0].numpy()
-
-            # Update the input ids
-            input_ids = np.roll(input_ids, -1, axis=1)
-            input_ids[0, -1] = predicted_id
-
-            # Convert token to word and add to generated text
-            # if predicted_id in self.index_word:
-            word = self.id_to_word(predicted_id)
-            prompt += " " + word
-
-            # Stop if we generate an end token
-            if word == "<EOS>":
-                break
-
-        return prompt
-
-
-""" 
-        
-TensorFlow's SubwordTextEncoder is part of the tensorflow_text and tensorflow_datasets packages. It creates a subword vocabulary that can handle out-of-vocabulary words effectively. Here's how to use it:
-
-import tensorflow as tf
-import tensorflow_datasets as tfds
-
-class SLAMWithSubwordTokenizer:
-    def __init__(self, vocab_size=8000, quiet=False):
-        self.vocab_size = vocab_size
-        self.quiet = quiet
-        self.tokenizer = None
-        
-    def fit(self, texts):
-        if not self.quiet:
-            print(f"Building subword tokenizer with target vocab size: {self.vocab_size}")
-        
-        # Create a subword tokenizer
-        self.tokenizer = tfds.features.text.SubwordTextEncoder.build_from_corpus(
-            corpus_iterator=texts,
-            target_vocab_size=self.vocab_size,
-            max_subword_length=20,  # Maximum length for subwords
-            reserved_tokens=["<PAD>", "<BOS>", "<EOS>", "<UNK>"]
-        )
-        
-        # The actual vocabulary size might differ from requested
-        self.vocab_size = self.tokenizer.vocab_size
-        
-        if not self.quiet:
-            print(f"Actual vocabulary size: {self.vocab_size}")
-            print(f"Sample tokens: {self.tokenizer.subwords[:10]}")
-        
-        return self
-    
-    def encode(self, texts, add_special_tokens=True):
-        if not isinstance(texts, list):
-            texts = [texts]
-            
-        encoded = []
-        for text in texts:
-            # Encode the text to subword IDs
-            tokens = self.tokenizer.encode(text)
-            
-            # Add special tokens if requested
-            if add_special_tokens:
-                bos_id = self.tokenizer.vocab_size - 3  # <BOS> index
-                eos_id = self.tokenizer.vocab_size - 2  # <EOS> index
-                tokens = [bos_id] + tokens + [eos_id]
-                
-            encoded.append(tokens)
-            
-        return encoded
-    
-    def decode(self, sequences):
-        if not isinstance(sequences, list):
-            sequences = [sequences]
-            
-        decoded = []
-        for seq in sequences:
-            # Remove special tokens if present (simple approach)
-            tokens = [t for t in seq if t < self.tokenizer.vocab_size - 4]  # Exclude special tokens
-            
-            # Decode back to text
-            text = self.tokenizer.decode(tokens)
-            decoded.append(text)
-            
-        return decoded if len(decoded) > 1 else decoded[0]
-    
-    def save(self, filename):
-        self.tokenizer.save_to_file(filename)
-        if not self.quiet:
-            print(f"Tokenizer saved to {filename}")
-    
-    def load(self, filename):
-        self.tokenizer = tfds.features.text.SubwordTextEncoder.load_from_file(filename)
-        self.vocab_size = self.tokenizer.vocab_size
-        if not self.quiet:
-            print(f"Loaded tokenizer with vocab size: {self.vocab_size}")
-        return self
-
-
-# Example usage
-if __name__ == "__main__":
-    # Sample texts
-    texts = [
-        "This is a sample sentence.",
-        "Another example with different words.",
-        "Subword tokenization handles unknown words better.",
-        "Words like 'tokenization' are split into smaller parts."
-    ]
-    
-    # Create and fit the tokenizer
-    tokenizer = SLAMWithSubwordTokenizer(vocab_size=100)
-    tokenizer.fit(texts)
-    
-    # Encode some text
-    encoded = tokenizer.encode("This is a new example.")
-    print(f"Encoded: {encoded}")
-    
-    # Decode back to text
-    decoded = tokenizer.decode(encoded)
-    print(f"Decoded: {decoded}")
-    
-    # Save and load
-    tokenizer.save("my_subword_tokenizer")
-    new_tokenizer = SLAMWithSubwordTokenizer()
-    new_tokenizer.load("my_subword_tokenizer")
-
-
-"""

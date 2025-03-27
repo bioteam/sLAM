@@ -5,7 +5,7 @@ Demonstration code to create a GPT-2-style, decoder-only small LAnguage Model th
 ## Installation
 
 ```sh
-git clone git@github.com:bosborne/sLAM.git
+git clone git@github.com:bioteam/sLAM.git
 cd sLAM
 pip3 install .
 ```
@@ -22,12 +22,12 @@ Complete the installation:
 
 The code uses *wikitext-2-v1* from Hugging Face as training text.
 
-### Create a model
+### Create a model and generate
 
-Supply a prompt:
+Create a model and supply a prompt:
 
 ```sh
-python3 sLAM/make-slam.py -p "I am testing a language model"
+python3 sLAM/make-slam.py -p "I am testing a language model" -d -v
 ```
 
 ### Query the model

@@ -1,33 +1,50 @@
 import argparse
+import sys
 from slam import slam_builder
+from datasets import load_dataset
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-i",
     "--input_dir",
-    required=True,
-    help="Directory with text files",
+    help="Specify a directory with text files",
 )
 parser.add_argument(
-    "-p",
-    "--percent_files",
+    "-d",
+    "--download",
+    action="store_true",
+    help="Do a text download from Hugging Face",
+)
+parser.add_argument(
+    "-t",
+    "--text_percentage",
     default=100,
     type=int,
-    help="Percentage of files used in dataset",
+    help="Percentage of input text used to make dataset",
 )
 parser.add_argument(
     "-n",
     "--name",
-    help="Default is timestamp of completion",
+    help="Name used to save files, default is timestamp of completion",
 )
-parser.add_argument("-q", "--quiet", action="store_true", help="Not verbose")
+parser.add_argument(
+    "--temperature", type=float, default=0.7, help="Temperature"
+)
+parser.add_argument("-p", "--prompt", help="Prompt", required=True)
+parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
 
 
-builder = slam_builder(quiet=args.quiet, name=args.name)
+builder = slam_builder(verbose=args.verbose, name=args.name)
 
-texts = builder.load_text(args.input_dir, args.percent_files)
+if args.download:
+    raw_texts = load_dataset("wikitext", "wikitext-2-v1")
+    texts = builder.clean_wikitext_2_v1(raw_texts, args.text_percentage)
+elif args.input_dir:
+    texts = builder.load_text(args.input_dir, args.text_percentage)
+else:
+    sys.exit("No input")
 
 builder.create_tokenizer()
 
@@ -39,9 +56,14 @@ model = builder.create_small_gpt2_model()
 
 builder.train_model(dataset, model)
 
-if not args.quiet:
+if args.verbose:
     model.summary()
     embedding_layer = model.get_layer("token_embeddings")
     print(f"Vocabulary size: {embedding_layer.input_dim}")
+
+result = builder.generate_text(
+    model, args.prompt, temperature=args.temperature
+)
+print(f"Result: {result}")
 
 builder.save(model)
