@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only small LAnguage Model that can be built using personal computing.
+Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing.
 
 ## Installation
 
