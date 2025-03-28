@@ -47,3 +47,11 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 ```sh
 python3 sLAM/make-slam.py -d -t 1 -p "I am testing a language model" -v
 ```
+
+This job takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
+
+## To Do
+
+* Add a validation dataset to test validation loss and other metrics.
+* Add ability to download or load other text inputs.
+* Add subword tokenization capability.
