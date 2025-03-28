@@ -11,6 +11,7 @@ from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
+from sklearn.model_selection import train_test_split
 
 
 class slam_builder:
@@ -295,14 +296,14 @@ class slam_builder:
             texts -- list of strings
 
         Returns:
-            tf.data.Dataset.from_tensor_slices
+            tensorflow.python.data.ops.prefetch_op._PrefetchDataset
 
         Converts text to sequences of integers which are token
         ids that correspond to the indices in word_index.
         """
         if self.verbose:
             print(
-                "prepare_dataset(): tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices"
+                "prepare_dataset(): tokenize, prepare input and target token sequences, and create a tensorflow.python.data.ops.prefetch_op._PrefetchDataset"
             )
 
         if self.verbose:
@@ -339,10 +340,11 @@ class slam_builder:
     # Custom training function with callbacks
     def train_model(
         self,
-        train_dataset,
+        dataset,
         model,
         learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
+        train_fraction=0.8,
     ):
         """train_model Set up optimizer, checkpoints, compile(), and run model.fit()
 
@@ -353,11 +355,12 @@ class slam_builder:
         Keyword Arguments:
             learning_rate -- learning rate (default: {5e-5})
             checkpoint_dir -- checkpoint directory (default: {"./checkpoints"})
+            validation_split -- fraction of data to use for validation (default: {0.2})
 
         Total Parameters
 
-        The total number of weights and biases in the entire model. This represents the complete set of
-        values that define the model's behavior and what it has learned.
+        The total number of weights and biases in the entire model. This represents the complete
+        set of values that define the model's behavior and what it has learned.
 
         Trainable Parameters
 
@@ -452,11 +455,33 @@ class slam_builder:
         # Create checkpoint directory
         os.makedirs(checkpoint_dir, exist_ok=True)
 
+        dataset_list = list(dataset)
+
+        train_data, val_data = train_test_split(
+            dataset_list, train_size=train_fraction, random_state=42
+        )
+
+        # Convert back to tf.data.Dataset
+        train_dataset = tf.data.Dataset.from_tensor_slices(train_data)
+        val_dataset = tf.data.Dataset.from_tensor_slices(val_data)
+
+        # Reshape the data to match the expected input shape
+        train_dataset = train_dataset.map(lambda x: tf.reshape(x, (-1, 256)))
+        val_dataset = val_dataset.map(lambda x: tf.reshape(x, (-1, 256)))
+
+        # Batch the datasets
+        train_dataset = train_dataset.batch(self.batch_size)
+        val_dataset = val_dataset.batch(self.batch_size)
+
+        dataset_size = tf.data.experimental.cardinality(dataset).numpy()
+        train_size = int(dataset_size * train_fraction)
+        decay_steps = self.epochs * train_size // self.batch_size
+
         """Learning rate schedule"""
         lr_schedule = PolynomialDecay(
             initial_learning_rate=learning_rate,
             end_learning_rate=learning_rate / 10,
-            decay_steps=self.epochs * len(train_dataset),
+            decay_steps=decay_steps,
         )
 
         optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
@@ -483,10 +508,23 @@ class slam_builder:
             metrics=["accuracy"],
         )
 
-        # Train model
-        self.history = model.fit(
-            train_dataset, epochs=self.epochs, callbacks=[checkpoint_callback]
+        # Add this to your train_model method
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss", patience=3, restore_best_weights=True
         )
+        # Train model with validation data
+        self.history = model.fit(
+            train_dataset,
+            epochs=self.epochs,
+            callbacks=[checkpoint_callback, early_stopping],
+            validation_data=val_dataset,  # Add validation data
+        )
+        val_loss = self.history.history["val_loss"]
+        if self.verbose:
+            print(f"val_loss: {val_loss[-1]}")
+        val_accuracy = self.history.history["val_accuracy"]
+        if self.verbose:
+            print(f"val_accuracy: {val_accuracy[-1]}")
 
     def save(self, model):
         """save save model and vocabulary JSON file

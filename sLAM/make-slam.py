@@ -29,7 +29,10 @@ parser.add_argument(
     help="Name used to save files, default is timestamp of completion",
 )
 parser.add_argument(
-    "--temperature", type=float, default=0.7, help="Temperature"
+    "--temperature",
+    type=float,
+    default=0.7,
+    help="Temperature used for generation",
 )
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
@@ -60,6 +63,7 @@ if args.verbose:
     model.summary()
     embedding_layer = model.get_layer("token_embeddings")
     print(f"Vocabulary size: {embedding_layer.input_dim}")
+    print(f"Number of tokens: {builder.num_tokens}")
 
 result = builder.generate_text(
     model, args.prompt, temperature=args.temperature
