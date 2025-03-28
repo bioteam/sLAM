@@ -20,6 +20,7 @@ Complete the installation:
 
 ## Usage
 
+```sh
 usage: make-slam.py [-h] [-i INPUT_DIR] [-d] [-t TEXT_PERCENTAGE] [-n NAME] [--temperature TEMPERATURE] -p PROMPT [-v]
 
 options:
@@ -35,13 +36,14 @@ options:
   -p PROMPT, --prompt PROMPT
                         Prompt
   -v, --verbose         Verbose
+```
 
 The code uses *wikitext-2-v1* from Hugging Face as training text if *-d* is specified.
 
-### Create a model and generate
+### Example usage
 
-For example, create a model, train with *wikitext-2-v1*, be verbose, and use a prompt:
+Download and clean *wikitext-2-v1*, create a model, train the model with 1% of the cleaned *wikitext-2-v1* sentences, be verbose, and use the given prompt:
 
 ```sh
-python3 sLAM/make-slam.py -p "I am testing a language model" -d -v
+python3 sLAM/make-slam.py -d -t 1 -p "I am testing a language model" -v
 ```

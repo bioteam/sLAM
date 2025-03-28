@@ -11,12 +11,11 @@ from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
-from sklearn.model_selection import train_test_split
 
 
 class slam_builder:
     """
-    A simple language model based on transformer encoder/decoder architecture.
+    A simple language model using transformer decoder-only architecture.
     Hyperparameters are set here before training (parameters are learned in the training,
     e.g. weights, values in the embedding matrices, coefficients in linear regression).
     """
@@ -35,6 +34,21 @@ class slam_builder:
         epochs: int = 1,
         batch_size: int = 4,
     ):
+        """__init__
+
+        Keyword Arguments:
+            verbose -- _description_ (default: {False})
+            name -- _description_ (default: {None})
+            vocab_size -- _description_ (default: {50000})
+            context_size -- _description_ (default: {256})
+            d_model -- _description_ (default: {256})
+            n_layers -- _description_ (default: {4})
+            n_heads -- _description_ (default: {4})
+            d_ff -- _description_ (default: {1024})
+            dropout_rate -- _description_ (default: {0.1})
+            epochs -- _description_ (default: {1})
+            batch_size -- _description_ (default: {4})
+        """
         self.verbose = verbose
         self.name = name
         self.vocab_size = vocab_size
@@ -70,6 +84,18 @@ class slam_builder:
 
     # Define the transformer block
     def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
+        """transformer_block
+
+        Arguments:
+            x -- _description_
+            n_heads -- _description_
+            d_model -- _description_
+            d_ff -- _description_
+            dropout_rate -- _description_
+
+        Returns:
+            _description_
+        """
         # Multi-head attention
         attn_output = layers.MultiHeadAttention(
             num_heads=n_heads, key_dim=d_model // n_heads, dropout=dropout_rate
@@ -97,6 +123,13 @@ class slam_builder:
         dropout_rate=0.1,
     ):
         """create_small_gpt2_model
+
+        Keyword Arguments:
+            d_ff -- _description_ (default: {1024})
+            dropout_rate -- _description_ (default: {0.1})
+
+        Returns:
+            Untrained tf.Keras.model
 
         The vocab_size parameter defines the total number of unique tokens
         that your language model can recognize and generate.
@@ -215,10 +248,18 @@ class slam_builder:
 
     # Create a simple tokenizer
     def create_tokenizer(self):
-        """Creates a simple WordPiece tokenizer."""
+        """create_tokenizer
+
+        Creates a TextVectorization tokenizer and sets the maximum vocabulary size and sequence length.
+        Any tokens that are less frequent and fall outside the vocabulary limit will be replaced with an out-of-vocabulary token.
+
+        Arguments: none
+
+        Returns: none
+        """
         if self.verbose:
             print(
-                "create_tokenizer(): make a simple tokenizer (tf.keras.layers.TextVectorization) with an estimated vocabulary size"
+                "create_tokenizer(): initialize a tokenizer (tf.keras.layers.TextVectorization) and set the sequence length"
             )
 
         self.tokenizer = tf.keras.layers.TextVectorization(
@@ -232,10 +273,12 @@ class slam_builder:
         """
 
     def adapt(self, texts):
-        """adapt run adapt() and make a token id/token dictionary
+        """adapt run adapt() to create vocabulary and make a token_id/token dictionary
 
         Arguments:
             texts -- list of strings
+
+        Returns: none
 
         >>> import tensorflow as tf
         >>> texts = ["I love machine learning", "Machine learning is fun"]
@@ -256,8 +299,8 @@ class slam_builder:
             index: word
             for index, word in enumerate(self.tokenizer.get_vocabulary())
         }
-        self.token_ids = sorted(self.index_word.keys())
-        self.num_tokens = len(self.token_ids)
+        if self.verbose:
+            print(f"adapt(): vocabulary size is {len(self.index_word.keys())}")
 
     def load_text(self, input_dir, percentage):
         """load_text read input files from a directory
@@ -289,25 +332,30 @@ class slam_builder:
 
         return text
 
-    def prepare_dataset(self, texts):
-        """prepare_dataset
+    def prepare_datasets(self, texts):
+        """prepare_datasets
 
         Arguments:
             texts -- list of strings
 
         Returns:
-            tensorflow.python.data.ops.prefetch_op._PrefetchDataset
+            dataset - tf.data.Dataset.from_tensor_slices
 
-        Converts text to sequences of integers which are token
-        ids that correspond to the indices in word_index.
+        Converts text to sequences of integers (token
+        ids) that correspond to the indices in index_word.
         """
         if self.verbose:
             print(
-                "prepare_dataset(): tokenize, prepare input and target token sequences, and create a tensorflow.python.data.ops.prefetch_op._PrefetchDataset"
+                "prepare_datasets(): tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices dataset"
             )
+        """
+        Create a flat array of token IDs representing all tokens from the input texts in order. 
+        """
+        self.token_ids = self.tokenizer(texts).numpy().flatten()
+        self.num_tokens = len(self.token_ids)
 
         if self.verbose:
-            print(f"prepare_dataset(): number of tokens is {self.num_tokens}")
+            print(f"prepare_datasets(): number of tokens is {self.num_tokens}")
         """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
         for i in range(0, len(self.token_ids) - self.context_size):
@@ -318,13 +366,13 @@ class slam_builder:
         Take all tokens except the last one from each example sequence.
         For example, if we have a sequence of tokens [3, 5, 55, 4, 66]:
 
-        The input sequence would be  [3, 5, 55, 4]
+        The input sequence would be [3, 5, 55, 4]
         The target sequence would be [ 5, 55, 4, 66]
         """
         inputs = examples[:, :-1]  # tensor 1
         """
-        When training language models, the target is the next token that should follow 
-        after seeing a sequence of input tokens.
+        When training language models, the target token is the next token that should 
+        follow after seeing a sequence of input tokens.
         """
         targets = examples[:, 1:]  # tensor 2
 
@@ -340,11 +388,10 @@ class slam_builder:
     # Custom training function with callbacks
     def train_model(
         self,
-        dataset,
+        train_dataset,
         model,
         learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
-        train_fraction=0.8,
     ):
         """train_model Set up optimizer, checkpoints, compile(), and run model.fit()
 
@@ -355,12 +402,13 @@ class slam_builder:
         Keyword Arguments:
             learning_rate -- learning rate (default: {5e-5})
             checkpoint_dir -- checkpoint directory (default: {"./checkpoints"})
-            validation_split -- fraction of data to use for validation (default: {0.2})
+
+        Returns: none
 
         Total Parameters
 
-        The total number of weights and biases in the entire model. This represents the complete
-        set of values that define the model's behavior and what it has learned.
+        The total number of weights and biases in the entire model. This represents the complete set of
+        values that define the model's behavior and what it has learned.
 
         Trainable Parameters
 
@@ -455,33 +503,11 @@ class slam_builder:
         # Create checkpoint directory
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        dataset_list = list(dataset)
-
-        train_data, val_data = train_test_split(
-            dataset_list, train_size=train_fraction, random_state=42
-        )
-
-        # Convert back to tf.data.Dataset
-        train_dataset = tf.data.Dataset.from_tensor_slices(train_data)
-        val_dataset = tf.data.Dataset.from_tensor_slices(val_data)
-
-        # Reshape the data to match the expected input shape
-        train_dataset = train_dataset.map(lambda x: tf.reshape(x, (-1, 256)))
-        val_dataset = val_dataset.map(lambda x: tf.reshape(x, (-1, 256)))
-
-        # Batch the datasets
-        train_dataset = train_dataset.batch(self.batch_size)
-        val_dataset = val_dataset.batch(self.batch_size)
-
-        dataset_size = tf.data.experimental.cardinality(dataset).numpy()
-        train_size = int(dataset_size * train_fraction)
-        decay_steps = self.epochs * train_size // self.batch_size
-
         """Learning rate schedule"""
         lr_schedule = PolynomialDecay(
             initial_learning_rate=learning_rate,
             end_learning_rate=learning_rate / 10,
-            decay_steps=decay_steps,
+            decay_steps=self.epochs * len(train_dataset),
         )
 
         optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
@@ -508,29 +534,18 @@ class slam_builder:
             metrics=["accuracy"],
         )
 
-        # Add this to your train_model method
-        early_stopping = tf.keras.callbacks.EarlyStopping(
-            monitor="val_loss", patience=3, restore_best_weights=True
-        )
-        # Train model with validation data
+        # Train model
         self.history = model.fit(
-            train_dataset,
-            epochs=self.epochs,
-            callbacks=[checkpoint_callback, early_stopping],
-            validation_data=val_dataset,  # Add validation data
+            train_dataset, epochs=self.epochs, callbacks=[checkpoint_callback]
         )
-        val_loss = self.history.history["val_loss"]
-        if self.verbose:
-            print(f"val_loss: {val_loss[-1]}")
-        val_accuracy = self.history.history["val_accuracy"]
-        if self.verbose:
-            print(f"val_accuracy: {val_accuracy[-1]}")
 
     def save(self, model):
         """save save model and vocabulary JSON file
 
         Arguments:
             model -- trained model
+
+        Returns: none
         """
         """Use a timestamp if there's no name"""
         if not self.name:
@@ -547,9 +562,15 @@ class slam_builder:
             )
 
     def id_to_word(self, token_id):
-        return self.index_word.get(
-            token_id, ""
-        )  # Return empty string if ID not found
+        """id_to_word
+
+        Arguments:
+            token_id -- token id
+
+        Returns:
+            Token or None
+        """
+        return self.index_word.get(token_id, None)
 
     # Function to generate text
     def generate_text(
@@ -640,10 +661,12 @@ class slam_builder:
             prompt_ids = np.roll(prompt_ids, -1, axis=1)
             prompt_ids[0, -1] = predicted_id
 
-            # Convert token to word and add to generated text
-            # if predicted_id in self.index_word:
             word = self.id_to_word(predicted_id)
-            prompt += " " + word
+            if word:
+                prompt += " " + word
+            else:
+                if self.verbose:
+                    print(f"No token for id {predicted_id}")
 
             # Stop if we generate an end token
             if word == "<EOS>":
@@ -651,23 +674,29 @@ class slam_builder:
 
         return prompt
 
-    def clean_wikitext_2_v1(self, raw_texts, percentage):
+    def clean_wikitext(self, raw_texts, percentage, min_sentence_len):
         sentences = list()
         texts = [t["text"].strip() for t in raw_texts["train"]]
         texts = [t for t in texts if not t.startswith("=")]
         for text in texts:
             for sentence in nltk.sent_tokenize(text):
-                if "<unk>" not in sentence and len(sentence) > 32:
+                if (
+                    "<unk>" not in sentence
+                    and "http" not in sentence
+                    and len(sentence) > min_sentence_len
+                ):
                     sentences.append(sentence)
+        if self.verbose:
+            print(
+                f"clean_wikitext(): total number of cleaned sentences is {len(sentences)})"
+            )
         if percentage != 100:
             num_sentences = int(len(sentences) * percentage / 100)
             sentences = random.sample(sentences, num_sentences)
-            if self.verbose:
-                print(
-                    f"clean_wikitext(): using {percentage}% of sentences for the dataset"
-                )
         if self.verbose:
-            print(f"clean_wikitext(): {len(sentences)} cleaned sentences")
+            print(
+                f"clean_wikitext(): using {percentage}% ({len(sentences)}) of the cleaned sentences for the dataset"
+            )
         """For example: 'As a liquid , xenon has a density of up to 3 @.' """
         return sentences
 

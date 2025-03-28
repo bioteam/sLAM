@@ -29,6 +29,12 @@ parser.add_argument(
     help="Name used to save files, default is timestamp of completion",
 )
 parser.add_argument(
+    "--min_sentence_len",
+    type=int,
+    default=32,
+    help="Mininum sentence length used in training",
+)
+parser.add_argument(
     "--temperature",
     type=float,
     default=0.7,
@@ -43,7 +49,9 @@ builder = slam_builder(verbose=args.verbose, name=args.name)
 
 if args.download:
     raw_texts = load_dataset("wikitext", "wikitext-2-v1")
-    texts = builder.clean_wikitext_2_v1(raw_texts, args.text_percentage)
+    texts = builder.clean_wikitext(
+        raw_texts, args.text_percentage, args.min_sentence_len
+    )
 elif args.input_dir:
     texts = builder.load_text(args.input_dir, args.text_percentage)
 else:
@@ -53,11 +61,13 @@ builder.create_tokenizer()
 
 builder.adapt(texts)
 
-dataset = builder.prepare_dataset(texts)
+# train_dataset, val_dataset = builder.prepare_datasets(texts)
+train_dataset = builder.prepare_datasets(texts)
 
 model = builder.create_small_gpt2_model()
 
-builder.train_model(dataset, model)
+# builder.train_model(train_dataset, val_dataset, model)
+builder.train_model(train_dataset, model)
 
 if args.verbose:
     model.summary()
