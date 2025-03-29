@@ -11,6 +11,7 @@ from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
+from sklearn.model_selection import train_test_split
 
 
 class slam_builder:
@@ -332,21 +333,27 @@ class slam_builder:
 
         return text
 
-    def prepare_datasets(self, texts):
+    def prepare_datasets(
+        self,
+        texts,
+        train_size=0.8,
+    ):
         """prepare_datasets
 
         Arguments:
             texts -- list of strings
+            train_size -- float, proportion of data to use for training (default: 0.8)
 
         Returns:
-            dataset - tf.data.Dataset.from_tensor_slices
+            train_dataset - tf.data.Dataset.from_tensor_slices
+            val_dataset - tf.data.Dataset.from_tensor_slices
 
         Converts text to sequences of integers (token
-        ids) that correspond to the indices in index_word.
+        ids) that correspond to the indices in self.index_word.
         """
         if self.verbose:
             print(
-                "prepare_datasets(): tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices dataset"
+                "prepare_datasets(): tokenize, prepare input and target token sequences, and create tf.data.Dataset.from_tensor_slices training and validation datasets"
             )
         """
         Create a flat array of token IDs representing all tokens from the input texts in order. 
@@ -376,19 +383,47 @@ class slam_builder:
         """
         targets = examples[:, 1:]  # tensor 2
 
-        # Create TF dataset
-        dataset = tf.data.Dataset.from_tensor_slices((inputs, targets))
-        dataset = dataset.shuffle(10000).batch(
+        # Split the data into training and validation sets using sklearn
+        (
+            train_inputs,
+            val_inputs,
+            train_targets,
+            val_targets,
+        ) = train_test_split(
+            inputs, targets, train_size=train_size, random_state=42
+        )
+
+        if self.verbose:
+            print(
+                f"prepare_datasets(): training samples: {len(train_inputs)}, validation samples: {len(val_inputs)}"
+            )
+
+        # Create TF datasets for training and validation
+        train_dataset = tf.data.Dataset.from_tensor_slices(
+            (train_inputs, train_targets)
+        )
+        train_dataset = train_dataset.shuffle(10000).batch(
             self.batch_size, drop_remainder=True
         )
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
-        return dataset
+        val_dataset = tf.data.Dataset.from_tensor_slices(
+            (val_inputs, val_targets)
+        )
+        val_dataset = val_dataset.batch(self.batch_size, drop_remainder=True)
+        val_dataset = val_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        if self.verbose:
+            print(
+                f"prepare_datasets(): train_dataset is {train_dataset}, val_dataset is {val_dataset}"
+            )
+
+        return train_dataset, val_dataset
 
     # Custom training function with callbacks
     def train_model(
         self,
         train_dataset,
+        val_dataset,
         model,
         learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
@@ -500,14 +535,18 @@ class slam_builder:
         Where "number_of_sequences" is how many of these fixed-length token sequences you have in your training dataset.
         """
 
-        # Create checkpoint directory
         os.makedirs(checkpoint_dir, exist_ok=True)
+
+        train_dataset_size = tf.data.experimental.cardinality(
+            train_dataset
+        ).numpy()
+        decay_steps = self.epochs * train_dataset_size // self.batch_size
 
         """Learning rate schedule"""
         lr_schedule = PolynomialDecay(
             initial_learning_rate=learning_rate,
             end_learning_rate=learning_rate / 10,
-            decay_steps=self.epochs * len(train_dataset),
+            decay_steps=decay_steps,
         )
 
         optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
@@ -533,11 +572,32 @@ class slam_builder:
             ),
             metrics=["accuracy"],
         )
-
-        # Train model
-        self.history = model.fit(
-            train_dataset, epochs=self.epochs, callbacks=[checkpoint_callback]
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            patience=3,
+            restore_best_weights=True,
+            verbose=1,
         )
+
+        # Train model\
+        validation_callback = ValidationPrintCallback(val_dataset)
+        self.history = model.fit(
+            train_dataset,
+            epochs=self.epochs,
+            callbacks=[
+                checkpoint_callback,
+                early_stopping,
+                validation_callback,
+            ],
+            validation_data=val_dataset,
+            verbose=1,
+        )
+        val_loss = self.history.history["val_loss"]
+        if self.verbose:
+            print(f"val_loss: {val_loss[-1]}")
+        val_accuracy = self.history.history["val_accuracy"]
+        if self.verbose:
+            print(f"val_accuracy: {val_accuracy[-1]}")
 
     def save(self, model):
         """save save model and vocabulary JSON file
@@ -554,12 +614,13 @@ class slam_builder:
         model.save(f"{self.name}.keras")
         if self.verbose:
             print(f"save(): saved Keras model ({self.name}.keras)")
-        with open(f"{self.name}.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps(self.index_word))
-        if self.verbose:
-            print(
-                f"save(): saved JSON file ({self.name}.json) with int-to-word decoding and metadata"
-            )
+
+        # with open(f"{self.name}.json", "w", encoding="utf-8") as f:
+        #     f.write(json.dumps(self.index_word))
+        # if self.verbose:
+        #     print(
+        #         f"save(): saved JSON file ({self.name}.json) with int-to-word decoding and metadata"
+        #     )
 
     def id_to_word(self, token_id):
         """id_to_word
@@ -688,17 +749,30 @@ class slam_builder:
                     sentences.append(sentence)
         if self.verbose:
             print(
-                f"clean_wikitext(): total number of cleaned sentences is {len(sentences)})"
+                f"clean_wikitext(): total number of cleaned sentences is {len(sentences)}"
             )
         if percentage != 100:
             num_sentences = int(len(sentences) * percentage / 100)
             sentences = random.sample(sentences, num_sentences)
         if self.verbose:
             print(
-                f"clean_wikitext(): using {percentage}% ({len(sentences)}) of the cleaned sentences for the dataset"
+                f"clean_wikitext(): using {percentage}% ({len(sentences)}) of the cleaned sentences for the datasets"
             )
         """For example: 'As a liquid , xenon has a density of up to 3 @.' """
         return sentences
+
+
+class ValidationPrintCallback(tf.keras.callbacks.Callback):
+    def __init__(self, validation_data):
+        super().__init__()
+        self.validation_data = validation_data
+
+    def on_epoch_end(self, epoch, logs=None):
+        val_results = self.model.evaluate(self.validation_data, verbose=0)
+        metric_names = self.model.metrics_names
+        print(f"\nValidation results {epoch}:")
+        for name, value in zip(metric_names, val_results):
+            print(f"val_{name}: {value:.4f}")
 
 
 class slam_generator:
