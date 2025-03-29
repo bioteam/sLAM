@@ -382,6 +382,12 @@ class slam_builder:
             self.batch_size, drop_remainder=True
         )
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        """
+        <_PrefetchDataset element_spec=(TensorSpec(shape=(4, 256), dtype=tf.int64, 
+        name=None), TensorSpec(shape=(4, 256), dtype=tf.int64, name=None))>
+        """
+        if self.verbose:
+            print(f"prepare_datasets(): dataset is {dataset}")
 
         return dataset
 
