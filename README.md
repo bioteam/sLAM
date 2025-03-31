@@ -21,7 +21,10 @@ Complete the installation:
 ## Usage
 
 ```sh
-usage: make-slam.py [-h] [-i INPUT_DIR] [-d] [-t TEXT_PERCENTAGE] [-n NAME] [--temperature TEMPERATURE] -p PROMPT [-v]
+> python3 sLAM/make-slam.py -h
+usage: make-slam.py [-h] [-i INPUT_DIR] [-d] [-t TEXT_PERCENTAGE] [-n NAME]
+                    [--min_sentence_len MIN_SENTENCE_LEN] [--temperature TEMPERATURE] [--epochs EPOCHS] -p
+                    PROMPT [-v]
 
 options:
   -h, --help            show this help message and exit
@@ -31,24 +34,30 @@ options:
   -t TEXT_PERCENTAGE, --text_percentage TEXT_PERCENTAGE
                         Percentage of input text used to make dataset
   -n NAME, --name NAME  Name used to save files, default is timestamp of completion
+  --min_sentence_len MIN_SENTENCE_LEN
+                        Mininum sentence length used in training
   --temperature TEMPERATURE
-                        Temperature
+                        Temperature used for generation
+  --epochs EPOCHS       Number of epochs
   -p PROMPT, --prompt PROMPT
                         Prompt
   -v, --verbose         Verbose
+
 ```
 
 The code uses *wikitext-2-v1* from Hugging Face as training text if *-d* is specified.
 
 ### Example usage
 
-Download and clean *wikitext-2-v1*, create a model, train the model with 1% of the cleaned *wikitext-2-v1* sentences, be verbose, and use the given prompt:
+Download and clean *wikitext-2-v1*, create a model, train the model with 1% of the cleaned *wikitext-2-v1* sentences for 3 epochs, be verbose, and use the given prompt:
 
 ```sh
-python3 sLAM/make-slam.py -d -t 1 -p "I am testing a language model" -v
+python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
 ```
 
-1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM), using 1% of *wikitext-2-v1*.
+With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM). The result was:
+
+*This is a test the contract gave a revenue of up to 300 million in the course five years*
 
 ## To Do
 

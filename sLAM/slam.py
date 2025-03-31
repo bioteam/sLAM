@@ -250,7 +250,7 @@ class slam_builder:
         """
         if self.verbose:
             print(
-                "create_tokenizer(): initialize a tokenizer (tf.keras.layers.TextVectorization) and set the sequence length"
+                "create_tokenizer() - initialize a tokenizer (tf.keras.layers.TextVectorization) and set the sequence length"
             )
 
         self.tokenizer = tf.keras.layers.TextVectorization(
@@ -293,7 +293,7 @@ class slam_builder:
             for index, word in enumerate(self.tokenizer.get_vocabulary())
         }
         if self.verbose:
-            print(f"adapt(): vocabulary size is {len(self.index_word.keys())}")
+            print(f"adapt() - vocabulary size: {len(self.index_word.keys())}")
 
     def load_text(self, input_dir, percentage):
         """load_text
@@ -309,7 +309,9 @@ class slam_builder:
         """
         text = ""
         if self.verbose:
-            print("load_text(): read input text files and return 1 string")
+            print(
+                "load_text() - read input text files and return list of strings"
+            )
         file_paths = glob.glob(f"{input_dir}/*")
         if percentage != 100:
             if percentage > 100:
@@ -319,7 +321,7 @@ class slam_builder:
 
         if self.verbose:
             print(
-                f"load_text(): using {percentage}% of files in {input_dir} for the dataset"
+                f"load_text() - using {percentage}% of files in {input_dir} for the dataset"
             )
         for file_path in file_paths:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -347,7 +349,7 @@ class slam_builder:
         """
         if self.verbose:
             print(
-                "prepare_datasets(): tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices dataset"
+                "prepare_datasets() - tokenize, prepare input and target token sequences, and create a tf.data.Dataset.from_tensor_slices dataset"
             )
         """
         Create a flat array of token IDs representing all tokens from the input texts in order. 
@@ -356,7 +358,7 @@ class slam_builder:
         self.num_tokens = len(self.token_ids)
 
         if self.verbose:
-            print(f"prepare_datasets(): number of tokens is {self.num_tokens}")
+            print(f"prepare_datasets() - number of tokens: {self.num_tokens}")
         """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
         for i in range(0, len(self.token_ids) - self.context_size):
@@ -388,7 +390,7 @@ class slam_builder:
         name=None), TensorSpec(shape=(4, 256), dtype=tf.int64, name=None))>
         """
         if self.verbose:
-            print(f"prepare_datasets(): dataset is {dataset}")
+            print(f"prepare_datasets() - dataset is {dataset}")
 
         return dataset
 
@@ -489,8 +491,6 @@ class slam_builder:
 
         Context window: The sample length is determined by the model's context window (maximum sequence length)
 
-        Sliding windows: Samples may be created using sliding windows over text, potentially with overlap
-
         Batching: Multiple samples are grouped into batches for efficient processing
 
         Tokenization: Raw text must be tokenized before becoming samples
@@ -563,11 +563,11 @@ class slam_builder:
         """In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately"""
         model.save(f"{self.name}.keras")
         if self.verbose:
-            print(f"save(): saved Keras model ({self.name}.keras)")
+            print(f"save() - saved Keras model ({self.name}.keras)")
         with open(f"{self.name}.pickle", "wb") as p:
             pickle.dump(self.tokenizer, p, protocol=pickle.HIGHEST_PROTOCOL)
         if self.verbose:
-            print(f"save(): saved tokenizer ({self.name}.pickle)")
+            print(f"save() - saved tokenizer ({self.name}.pickle)")
 
     def id_to_word(self, token_id):
         """id_to_word
@@ -604,19 +604,19 @@ class slam_builder:
             token_counts.append(len(tokens))
 
         print(
-            f"analyze_text(): mean sentence length: {np.mean(token_counts):.1f} tokens"
+            f"analyze_text() - mean sentence length: {np.mean(token_counts):.1f} tokens"
         )
         print(
-            f"analyze_text(): median sentence length: {np.median(token_counts):.1f} tokens"
+            f"analyze_text() - median sentence length: {np.median(token_counts):.1f} tokens"
         )
         print(
-            f"analyze_text(): 95th percentile: {np.percentile(token_counts, 95):.1f} tokens"
+            f"analyze_text() - 95th percentile: {np.percentile(token_counts, 95):.1f} tokens"
         )
         print(
-            f"analyze_text(): 99th percentile: {np.percentile(token_counts, 99):.1f} tokens"
+            f"analyze_text() - 99th percentile: {np.percentile(token_counts, 99):.1f} tokens"
         )
         print(
-            f"analyze_text(): max sentence length: {np.max(token_counts)} tokens"
+            f"analyze_text() - max sentence length: {np.max(token_counts)} tokens"
         )
 
         # Histogram
@@ -670,7 +670,7 @@ class slam_builder:
 
         prompt_ids = self.tokenizer(tf.convert_to_tensor([prompt]))
         if self.verbose:
-            print(f"prompt_ids: {prompt_ids}")
+            print(f"generate_text() - prompt_ids: {prompt_ids}")
 
         # Truncate or pad if necessary
         # self.context_size = model.inputs[0].shape[1]
@@ -725,7 +725,7 @@ class slam_builder:
                 prompt += " " + word
             else:
                 if self.verbose:
-                    print(f"No token for id {predicted_id}")
+                    print(f"generate_text() - no token for id {predicted_id}")
 
             # Stop if we generate an end token
             if word == "<EOS>":
@@ -747,14 +747,14 @@ class slam_builder:
                     sentences.append(sentence)
         if self.verbose:
             print(
-                f"clean_wikitext(): total number of cleaned sentences is {len(sentences)})"
+                f"clean_wikitext() - total number of cleaned sentences: {len(sentences)})"
             )
         if percentage != 100:
             num_sentences = int(len(sentences) * percentage / 100)
             sentences = random.sample(sentences, num_sentences)
         if self.verbose:
             print(
-                f"clean_wikitext(): using {percentage}% ({len(sentences)}) of the cleaned sentences for the dataset"
+                f"clean_wikitext() - using {percentage}% ({len(sentences)}) of the cleaned sentences for the dataset"
             )
         """For example: 'As a liquid , xenon has a density of up to 3 @.' """
         return sentences
@@ -788,7 +788,6 @@ class slam_generator:
         print(
             f"Sample tokens: {list(tokenizer_config.get('word_index', {}).items())[:10]}"
         )
-
         # Verify the ID for <UNK> token
         print(
             f"<UNK> token id: {tokenizer_config.get('word_index', {}).get('<UNK>', 'Not found')}"
