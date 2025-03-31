@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing.
+Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing. This is not for production. You can use this code to learn about language models, preprocessing, and training hyperparameters.
 
 ## Installation
 
@@ -48,7 +48,7 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 python3 sLAM/make-slam.py -d -t 1 -p "I am testing a language model" -v
 ```
 
-1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
+1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM), using 1% of *wikitext-2-v1*.
 
 ## To Do
 

@@ -5,7 +5,7 @@ import os
 import random
 import sys
 import time
-import json
+import pickle
 import nltk
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -37,17 +37,18 @@ class slam_builder:
         """__init__
 
         Keyword Arguments:
-            verbose -- _description_ (default: {False})
-            name -- _description_ (default: {None})
-            vocab_size -- _description_ (default: {50000})
-            context_size -- _description_ (default: {256})
-            d_model -- _description_ (default: {256})
-            n_layers -- _description_ (default: {4})
-            n_heads -- _description_ (default: {4})
-            d_ff -- _description_ (default: {1024})
-            dropout_rate -- _description_ (default: {0.1})
-            epochs -- _description_ (default: {1})
-            batch_size -- _description_ (default: {4})
+            verbose -- Print out details (default: {False})
+            name -- Name identifier for the model (default: {None})
+            vocab_size -- Size of the vocabulary/token dictionary (default: {50000})
+            context_size -- Maximum sequence length for input contexts (default: {256})
+            d_model -- Dimensionality of the model's embeddings (default: {256})
+            n_layers -- Number of transformer layers in the model (default: {4})
+            n_heads -- Number of attention heads in each transformer layer (default: {4})
+            d_ff -- Dimensionality of the feed-forward network (default: {1024})
+            dropout_rate -- Rate of dropout for regularization (default: {0.1})
+            epochs -- Number of training epochs (default: {1})
+            batch_size -- Number of samples per training batch (default: {4})
+
         """
         self.verbose = verbose
         self.name = name
@@ -60,16 +61,6 @@ class slam_builder:
         self.dropout_rate = dropout_rate
         self.epochs = epochs
         self.batch_size = batch_size
-
-        """
-        Even smaller model for extremely limited resources:
-        vocab_size=5000,       # Smaller vocabulary
-        context_size=128,      # Shorter context
-        d_model=128,           # Smaller embeddings
-        n_layers=2,            # Fewer layers
-        n_heads=2,             # Fewer attention heads
-        d_ff=512               # Smaller feed-forward
-        """
 
         """
         Mixed precision training
@@ -86,15 +77,18 @@ class slam_builder:
     def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
         """transformer_block
 
+        A standard transformer block with multi-head attention and feed-forward network.
+
         Arguments:
-            x -- _description_
-            n_heads -- _description_
-            d_model -- _description_
-            d_ff -- _description_
-            dropout_rate -- _description_
+            x -- Input tensor to the transformer block
+            n_heads -- Number of attention heads to use
+            d_model -- Dimension of the model/embedding
+            d_ff -- Dimension of the feedforward network
+            dropout_rate -- Rate for dropout regularization
 
         Returns:
-            _description_
+            x -- Transformed tensor with the same shape as the input but processed through
+                 self-attention and feed-forward layers
         """
         # Multi-head attention
         attn_output = layers.MultiHeadAttention(
@@ -119,14 +113,10 @@ class slam_builder:
     # Create the custom GPT-2 small model
     def create_small_gpt2_model(
         self,
-        d_ff=1024,
-        dropout_rate=0.1,
     ):
         """create_small_gpt2_model
 
-        Keyword Arguments:
-            d_ff -- _description_ (default: {1024})
-            dropout_rate -- _description_ (default: {0.1})
+        Arguments: none
 
         Returns:
             Untrained tf.Keras.model
@@ -231,12 +221,12 @@ class slam_builder:
 
         # Add token and position embeddings
         x = layers.Add()([token_embeddings, position_embeddings])
-        x = layers.Dropout(dropout_rate)(x)
+        x = layers.Dropout(self.dropout_rate)(x)
 
         # Transformer blocks
         for i in range(self.n_layers):
             x = self.transformer_block(
-                x, self.n_heads, self.d_model, d_ff, dropout_rate
+                x, self.n_heads, self.d_model, self.d_ff, self.dropout_rate
             )
 
         # Output projection
@@ -251,7 +241,8 @@ class slam_builder:
         """create_tokenizer
 
         Creates a TextVectorization tokenizer and sets the maximum vocabulary size and sequence length.
-        Any tokens that are less frequent and fall outside the vocabulary limit will be replaced with an out-of-vocabulary token.
+        Any tokens that are less frequent and fall outside the vocabulary limit will be replaced with an
+        out-of-vocabulary token.
 
         Arguments: none
 
@@ -268,12 +259,14 @@ class slam_builder:
             output_sequence_length=self.context_size + 1,
         )
         """
-        The +1 allows the tokenizer to include the target token in the sequence. When training the model, 
+        The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
         you use the first context_size tokens as the input and the last context_size tokens as the target
         """
 
     def adapt(self, texts):
-        """adapt run adapt() to create vocabulary and make a token_id/token dictionary
+        """adapt
+
+        Run adapt() to create vocabulary and make a token_id/token dictionary
 
         Arguments:
             texts -- list of strings
@@ -303,14 +296,16 @@ class slam_builder:
             print(f"adapt(): vocabulary size is {len(self.index_word.keys())}")
 
     def load_text(self, input_dir, percentage):
-        """load_text read input files from a directory
+        """load_text
+
+        Read input files from a directory
 
         Arguments:
             input_dir -- input directory with text files
             percentage -- percentage of strings to return
 
         Returns:
-            list of strings
+            text - list of strings
         """
         text = ""
         if self.verbose:
@@ -334,6 +329,12 @@ class slam_builder:
 
     def prepare_datasets(self, texts):
         """prepare_datasets
+
+        1. Tokenizes the input texts into a flat array of integer token IDs
+        2. Creates examples by sliding a window of size context_size + 1 over the token sequence
+        3. Splits each example into input (all tokens except the last) and target (all tokens except the first)
+        4. Creates a TensorFlow dataset from these input/target pairs
+        5. Applies shuffling, batching, and prefetching for efficient training
 
         Arguments:
             texts -- list of strings
@@ -399,7 +400,9 @@ class slam_builder:
         learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
     ):
-        """train_model Set up optimizer, checkpoints, compile(), and run model.fit()
+        """train_model
+
+        Set up optimizer, checkpoints, compile(), and run model.fit()
 
         Arguments:
             train_dataset -- tf.data.Dataset.from_tensor_slices
@@ -546,29 +549,30 @@ class slam_builder:
         )
 
     def save(self, model):
-        """save save model and vocabulary JSON file
+        """save
+
+        Save model and tokenizer. Use a timestamp if no name is supplied.
 
         Arguments:
             model -- trained model
 
         Returns: none
         """
-        """Use a timestamp if there's no name"""
         if not self.name:
             self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
         """In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately"""
         model.save(f"{self.name}.keras")
         if self.verbose:
             print(f"save(): saved Keras model ({self.name}.keras)")
-        with open(f"{self.name}.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps(self.index_word))
+        with open(f"{self.name}.pickle", "wb") as p:
+            pickle.dump(self.tokenizer, p, protocol=pickle.HIGHEST_PROTOCOL)
         if self.verbose:
-            print(
-                f"save(): saved JSON file ({self.name}.json) with int-to-word decoding and metadata"
-            )
+            print(f"save(): saved tokenizer ({self.name}.pickle)")
 
     def id_to_word(self, token_id):
         """id_to_word
+
+        Get a token given a token id
 
         Arguments:
             token_id -- token id
@@ -578,6 +582,52 @@ class slam_builder:
         """
         return self.index_word.get(token_id, None)
 
+    def analyze_text(self, sentences):
+        """analyze_text
+
+        Analyze sentence lengths and create a histogram. Create a dedicated tokenizer for analysis
+        without the output_sequence_length parameter so it does not pad with 0's.
+
+        Arguments:
+            sentences -- list of strings
+
+        """
+        analysis_tokenizer = tf.keras.layers.TextVectorization(
+            max_tokens=50000,
+            output_mode="int",
+        )
+        analysis_tokenizer.adapt(sentences)
+
+        token_counts = []
+        for sentence in sentences:
+            tokens = analysis_tokenizer(sentence)
+            token_counts.append(len(tokens))
+
+        print(
+            f"analyze_text(): mean sentence length: {np.mean(token_counts):.1f} tokens"
+        )
+        print(
+            f"analyze_text(): median sentence length: {np.median(token_counts):.1f} tokens"
+        )
+        print(
+            f"analyze_text(): 95th percentile: {np.percentile(token_counts, 95):.1f} tokens"
+        )
+        print(
+            f"analyze_text(): 99th percentile: {np.percentile(token_counts, 99):.1f} tokens"
+        )
+        print(
+            f"analyze_text(): max sentence length: {np.max(token_counts)} tokens"
+        )
+
+        # Histogram
+        import matplotlib.pyplot as plt
+
+        plt.hist(token_counts, bins=30)
+        plt.title("Distribution of Wikipedia Sentence Lengths")
+        plt.xlabel("Number of Tokens")
+        plt.ylabel("Frequency")
+        plt.savefig("sentence_length_distribution.png")
+
     # Function to generate text
     def generate_text(
         self,
@@ -586,12 +636,15 @@ class slam_builder:
         max_length: int = 100,
         temperature=None,
     ):
-        """
+        """generate_text
+
         Generate text using the trained model
 
-        Args:
+        Arguments:
             model:
             prompt: Initial text prompt to start generation
+
+        Keyword Arguments:
             max_length: Maximum length of generated sequence
             temperature: Controls randomness in generation
 

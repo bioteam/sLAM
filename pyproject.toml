@@ -20,6 +20,7 @@ tensorflow = ">=2.8.2"
 keras = ">=2.8.0"
 datasets = '*'
 nltk = '*'
+matplotlib = '*'
 
 [build-system]
 requires = ["poetry-core"]

@@ -40,12 +40,20 @@ parser.add_argument(
     default=0.7,
     help="Temperature used for generation",
 )
+parser.add_argument(
+    "--epochs",
+    type=int,
+    default=3,
+    help="Number of epochs",
+)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
 
 
-builder = slam_builder(verbose=args.verbose, name=args.name)
+builder = slam_builder(
+    verbose=args.verbose, name=args.name, epochs=args.epochs
+)
 
 if args.download:
     raw_texts = load_dataset("wikitext", "wikitext-2-v1")
@@ -60,6 +68,9 @@ else:
 builder.create_tokenizer()
 
 builder.adapt(texts)
+
+if args.verbose:
+    builder.analyze_text(texts)
 
 # train_dataset, val_dataset = builder.prepare_datasets(texts)
 train_dataset = builder.prepare_datasets(texts)
