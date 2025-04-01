@@ -1,6 +1,8 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing. This is not for production. You can use this code to learn about generative language models, preprocessing, and training hyperparameters.
+Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing. 
+
+This is not for production. You can use this code to learn about generative language models, preprocessing, and training hyperparameters.
 
 ## Installation
 
@@ -57,7 +59,7 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
 ```
 
-This creates a Keras model, a saved tokenizer, and a histogram of sentence lengths. for example:
+This creates a Keras model and a saved tokenizer with the same name, and a histogram of sentence lengths. for example:
 
 ```sh
 -rw-r--r--   332M Apr  1 05:09 04-01-2025-05-09-04.keras
@@ -74,7 +76,7 @@ Some results from 3 epochs:
 
 These examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and that overfitting may be occuring.
 
-### Generate using an exising model
+### Generate using an existing model
 
 Supply the prefix of the model and the saved tokenizer, and a prompt:
 
