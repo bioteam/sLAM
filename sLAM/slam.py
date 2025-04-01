@@ -288,12 +288,20 @@ class slam_builder:
 
         self.tokenizer.adapt(texts)
 
+        self.create_index()
+
+        if self.verbose:
+            print(f"adapt() - vocabulary size: {len(self.index_word.keys())}")
+
+    def create_index(self):
+        """create_index
+
+        Create an index for decoding
+        """
         self.index_word = {
             index: word
             for index, word in enumerate(self.tokenizer.get_vocabulary())
         }
-        if self.verbose:
-            print(f"adapt() - vocabulary size: {len(self.index_word.keys())}")
 
     def load_text(self, input_dir, percentage):
         """load_text
@@ -547,6 +555,7 @@ class slam_builder:
         self.history = model.fit(
             train_dataset, epochs=self.epochs, callbacks=[checkpoint_callback]
         )
+        return model
 
     def save(self, model):
         """save
@@ -631,8 +640,8 @@ class slam_builder:
     # Function to generate text
     def generate_text(
         self,
-        model,
         prompt,
+        model,
         max_length: int = 100,
         temperature=None,
     ):
@@ -641,8 +650,8 @@ class slam_builder:
         Generate text using the trained model
 
         Arguments:
-            model:
             prompt: Initial text prompt to start generation
+            model: Keras model
 
         Keyword Arguments:
             max_length: Maximum length of generated sequence
@@ -759,42 +768,15 @@ class slam_builder:
         """For example: 'As a liquid , xenon has a density of up to 3 @.' """
         return sentences
 
-
-class slam_generator:
-    def __init__(self, name):
+    def load(self, name):
         self.name = name
-        if not os.path.exists(f"{self.name}.json"):
-            sys.exit(f"Tokenizer JSON file not found: {self.name}.json")
-        with open(f"{self.name}.json", "r", encoding="utf-8") as f:
-            tokenizer_json = f.read()
-            self.tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(
-                tokenizer_json
-            )
+        if not os.path.exists(f"{self.name}.pickle"):
+            sys.exit(f"Tokenizer pickle file not found: {self.name}.pickle")
+        with open(f"{self.name}.pickle", "rb") as f:
+            self.tokenizer = pickle.load(f)
+        self.create_index()
+
         if not os.path.exists(f"{self.name}.keras"):
             sys.exit(f"Model file not found: {self.name}.keras")
-        self.model = tf.keras.models.load_model(f"{self.name}.keras")
-
-        self.index_word = {
-            index: word for word, index in self.tokenizer.word_index.items()
-        }
-
-        # Check tokenizer vocabulary size
-        import json
-
-        tokenizer_config = json.loads(tokenizer_json)
-        print(
-            f"Vocabulary size: {tokenizer_config.get('config', {}).get('num_words', len(tokenizer_config.get('word_index', {})))}"
-        )
-        print(
-            f"Sample tokens: {list(tokenizer_config.get('word_index', {}).items())[:10]}"
-        )
-        # Verify the ID for <UNK> token
-        print(
-            f"<UNK> token id: {tokenizer_config.get('word_index', {}).get('<UNK>', 'Not found')}"
-        )
-
-    # 4. Function to convert a single ID to a word
-    def id_to_word(self, token_id):
-        return self.index_word.get(
-            token_id, ""
-        )  # Return empty string if ID not found
+        model = tf.keras.models.load_model(f"{self.name}.keras")
+        return model

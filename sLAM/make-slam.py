@@ -78,7 +78,7 @@ train_dataset = builder.prepare_datasets(texts)
 model = builder.create_small_gpt2_model()
 
 # builder.train_model(train_dataset, val_dataset, model)
-builder.train_model(train_dataset, model)
+model = builder.train_model(train_dataset, model)
 
 if args.verbose:
     model.summary()
@@ -87,7 +87,7 @@ if args.verbose:
     print(f"Number of tokens: {builder.num_tokens}")
 
 result = builder.generate_text(
-    model, args.prompt, temperature=args.temperature
+    args.prompt, model, temperature=args.temperature
 )
 print(f"Result: {result}")
 

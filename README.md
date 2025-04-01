@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing. This is not for production. You can use this code to learn about language models, preprocessing, and training hyperparameters.
+Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing. This is not for production. You can use this code to learn about generative language models, preprocessing, and training hyperparameters.
 
 ## Installation
 
@@ -47,7 +47,7 @@ options:
 
 The code uses *wikitext-2-v1* from Hugging Face as training text if *-d* is specified.
 
-### Example usage
+### Build a model
 
 Download and clean *wikitext-2-v1*, create a model, train the model with 1% of the cleaned *wikitext-2-v1* sentences for 3 epochs, be verbose, and use the given prompt:
 
@@ -55,13 +55,26 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
 ```
 
-With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM). The result was:
+With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM). 
 
-*This is a test the contract gave a revenue of up to 300 million in the course five years*
+Some results from 3 epochs:
+
+* This is a test the contract gave a revenue of up to 300 million in the course five years
+* This is a test the hurricane began to turn more northwestward in response to a high pressure system weakening to its north
+
+These examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and that overfitting may be occuring.
+
+### Generate using an exising model
+
+```sh
+python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
+```
 
 ## To Do
 
 * Add a validation dataset to test validation loss and other metrics.
+* Experiment with larger input texts
 * Add ability to download or load other text inputs.
 * Add subword tokenization capability.
 * Handle end-of-sentence (EOS) correctly.
+* Implement *mask_zero=True* in the embedding layer.
