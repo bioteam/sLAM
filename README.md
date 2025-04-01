@@ -18,6 +18,8 @@ Complete the installation:
 >>> nltk.download('punkt_tab')
 ```
 
+*nltk* is used for sentence tokenization.
+
 ## Usage
 
 ```sh
