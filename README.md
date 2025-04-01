@@ -73,8 +73,8 @@ python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 ## To Do
 
 * Add a validation dataset to test validation loss and other metrics.
+* Use validation loss as a metric for *early_stopping*
 * Experiment with larger input texts
-* Add ability to download or load other text inputs.
 * Add subword tokenization capability.
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer.
