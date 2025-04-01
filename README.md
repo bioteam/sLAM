@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing. 
+Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing.
 
 This is not for production. You can use this code to learn about generative language models, preprocessing, and training hyperparameters.
 
@@ -80,7 +80,7 @@ These examples suggest that the model is "memorizing" rather than generating nov
 
 ### Generate using an existing model
 
-Supply the prefix of the model and the saved tokenizer, and a prompt:
+Supply the name of the model and the saved tokenizer, and a prompt:
 
 ```sh
 python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
