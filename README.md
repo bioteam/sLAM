@@ -55,7 +55,7 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
 ```
 
-With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM). 
+With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
 
 Some results from 3 epochs:
 
@@ -75,6 +75,6 @@ python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 * Add a validation dataset to test validation loss and other metrics.
 * Use validation loss as a metric for *early_stopping*
 * Experiment with larger input texts
-* Add subword tokenization capability.
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer.
+* Optional: Add subword tokenization capability.
