@@ -69,12 +69,14 @@ This creates a Keras model and a saved tokenizer with the same name, and a histo
 
 With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
 
-Some results from 3 epochs:
+Some results from a model trained for 3 epochs at different temperatures:
 
 * This is a test the contract gave a revenue of up to 300 million in the course five years
 * This is a test the hurricane began to turn more northwestward in response to a high pressure system weakening to its north
+* this is a test right when reubens begins to snap danny out of hypnosis crush
+* this is a test it pond and the route wanted of what is today on july 21 humor and is according to burn for 21 although there
 
-These examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and that overfitting may be occuring.
+These examples suggest that the model is "memorizing" rather than generating novel text at lower temperatures. It's likely that the training data set is too small, and that overfitting may be occuring.
 
 ### Generate using an existing model
 
@@ -89,7 +91,6 @@ python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 * Add a validation dataset to test validation loss and other metrics.
 * Use validation loss as a metric for *early_stopping*.
 * Experiment with larger input texts.
-* Experiment with *temperature*.
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored.
 * Optional: Add subword tokenization capability.
