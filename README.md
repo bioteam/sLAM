@@ -57,6 +57,14 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
 ```
 
+This creates a Keras model, a saved tokenizer, and a histogram of sentence lengths. for example:
+
+```sh
+-rw-r--r--   332M Apr  1 05:09 04-01-2025-05-09-04.keras
+-rw-r--r--    58K Apr  1 05:09 04-01-2025-05-09-04.pickle
+-rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
+```
+
 With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
 
 Some results from 3 epochs:
@@ -68,6 +76,8 @@ These examples suggest that the model is "memorizing" rather than generating nov
 
 ### Generate using an exising model
 
+Supply the prefix of the model and the saved tokenizer, and a prompt:
+
 ```sh
 python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 ```
@@ -77,6 +87,7 @@ python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 * Add a validation dataset to test validation loss and other metrics.
 * Use validation loss as a metric for *early_stopping*.
 * Experiment with larger input texts.
+* Experiment with *temperature*.
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored.
 * Optional: Add subword tokenization capability.
