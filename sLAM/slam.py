@@ -89,6 +89,22 @@ class slam_builder:
         Returns:
             x -- Transformed tensor with the same shape as the input but processed through
                  self-attention and feed-forward layers
+
+        Multi-Head Attention
+
+        Multi-head attention is a key component of transformer models that allows them to focus on different parts of input sequences simultaneously. Here's how it works: Rather than having a single attention mechanism (one "head"), multi-head attention runs multiple attention operations in parallel. Each head can focus on different aspects of the input. The process:
+
+        1. Input Transformation: The input is projected into multiple sets of queries (Q), keys (K), and values (V) using different learned projection matrices
+
+        2. Parallel Attention: Each head performs its own scaled dot-product attention:
+            a. Computes compatibility between queries and keys
+            b. Applies softmax to get attention weights
+            c. Takes weighted sum of values
+
+        3. Concatenation: The outputs from all heads are concatenated together
+
+        4. Final Projection: The concatenated output goes through a final linear projection
+
         """
         # Multi-head attention
         attn_output = layers.MultiHeadAttention(
@@ -178,36 +194,34 @@ class slam_builder:
 
         Characteristics:
 
-        Converts tokens (words/subwords) into dense vector representations
-        Captures semantic relationships between tokens
-        Same token gets the same embedding regardless of position
-        Learned during training to encode meaning and context
-        Dimension typically ranges from 128 to 1024
-        Example: The word "bank" would have a single token embedding that tries to capture its 
-        meaning, regardless of where it appears in a sentence.
+        - Converts tokens (words/subwords) into dense vector representations
+        - Captures semantic relationships between tokens
+        - Same token gets the same embedding regardless of position
+        - Learned during training to encode meaning and context
+        - Dimension typically ranges from 128 to 1024
+        - Example: The word "bank" would have a single token embedding that tries to capture its 
+          meaning, regardless of where it appears in a sentence.
 
         Positional Embedding
         Purpose: Encodes the position/location of each token in the sequence.
 
         Characteristics:
 
-        Provides information about token order in the sequence
-        Necessary because transformer attention mechanisms have no inherent notion of order
-        Can be learned or fixed (using mathematical functions)
-        Allows the model to understand concepts like word order, syntax, and proximity
-        Has the same dimension as token embeddings to allow addition
-        Example: The word "bank" would get a different positional embedding when it appears as the 
-        1st word versus when it appears as the 5th word.
+        - Provides information about token order in the sequence
+        - Necessary because transformer attention mechanisms have no inherent notion of order
+        - Can be learned or fixed (using mathematical functions)
+        - Allows the model to understand concepts like word order, syntax, and proximity
+        - Has the same dimension as token embeddings to allow addition
+        - Example: The word "bank" would get a different positional embedding when it appears as the 
+          1st word versus when it appears as the 5th word.
 
         How They Work Together In Transformer Models:
 
-        Each token is converted to a token embedding
-        A positional embedding corresponding to the token's position is added
-        The result is the input representation: Input = Token Embedding + Positional Embedding
-        This combined embedding allows the model to process both:
+        - Each token is converted to a token embedding
+        - A positional embedding corresponding to the token's position is added
+        - The result is the input representation: Input = Token Embedding + Positional Embedding
+        - This combined embedding allows the model to process both:
 
-        What the token means (token embedding)
-        Where the token is located (positional embedding)
         Without positional embeddings, a transformer would treat "The dog chased the cat" and 
         "The cat chased the dog" as equivalent, since it would only see the same set of tokens 
         without position information.
@@ -440,24 +454,24 @@ class slam_builder:
         These parameters are not updated during training. They remain fixed at their initial values or
         at values they were set to previously. Non-trainable parameters can come from:
 
-        Layers that are explicitly frozen (set to non-trainable) during transfer learning
-
-        Batch normalization statistics (moving means and variances) that are updated during training but not through backpropagation
-        Embedding layers that are set to non-trainable (like when using pre-trained word embeddings)
-        Parameters in layers where training is disabled
+        - Layers that are explicitly frozen (set to non-trainable) during transfer learning
+        - Batch normalization statistics (moving means and variances) that are updated during training but not
+          through backpropagation
+        - Embedding layers that are set to non-trainable (like when using pre-trained word embeddings)
+        - Parameters in layers where training is disabled
 
         An epoch represents one complete pass through the entire training dataset. Within each epoch,
         the training data is processed in smaller batches, with each batch being a "step."
 
         Steps in Each Epoch
 
-        Forward Pass: For each batch, the model makes predictions based on current parameters
-        Loss Calculation: The error/loss between predictions and actual values is computed
-        Backward Pass (Backpropagation): Gradients are calculated to determine how to adjust parameters
-        Parameter Update: Weights and biases are updated according to the optimizer's rules
-        Metrics Tracking: Performance metrics are updated (accuracy, loss, etc.)
-        Repeat: Steps 1-5 are repeated for each batch until the full dataset is processed
-        Validation (optional): After all training batches, the model is evaluated on validation data
+        - Forward Pass: For each batch, the model makes predictions based on current parameters
+        - Loss Calculation: The error/loss between predictions and actual values is computed
+        - Backward Pass (Backpropagation): Gradients are calculated to determine how to adjust parameters
+        - Parameter Update: Weights and biases are updated according to the optimizer's rules
+        - Metrics Tracking: Performance metrics are updated (accuracy, loss, etc.)
+        - Repeat: Steps 1-5 are repeated for each batch until the full dataset is processed
+        - Validation (optional): After all training batches, the model is evaluated on validation data
 
         How the Number of Steps is Determined
 
@@ -493,15 +507,12 @@ class slam_builder:
         These sequences are often extracted from a larger corpus of text
         Each sample serves as a training example for the model to learn from
 
-        Important Characteristics
+        Important Characteristics:
 
-        Sequence-based: Unlike image classification where one image = one sample, LLM samples are sequences of tokens
-
-        Context window: The sample length is determined by the model's context window (maximum sequence length)
-
-        Batching: Multiple samples are grouped into batches for efficient processing
-
-        Tokenization: Raw text must be tokenized before becoming samples
+        - Sequence-based: Unlike image classification where one image = one sample, LLM samples are sequences of tokens
+        - Context window: The sample length is determined by the model's context window (maximum sequence length)
+        - Batching: Multiple samples are grouped into batches for efficient processing
+        - Tokenization: Raw text must be tokenized before becoming samples
 
         Example
 
@@ -540,8 +551,7 @@ class slam_builder:
         Logits in neural networks: When your model makes a prediction for the next token in a sequence, 
         it outputs a vector of real numbers (one for each token in your vocabulary). These raw output values are called "logits".
 
-        Relationship to probabilities: Logits are not probabilities - they can be any real number (positive, negative, or zero). 
-        To convert logits to probabilities, you typically apply a softmax function.
+        Relationship to probabilities: Logits are not probabilities - they can be any real number (positive, negative, or zero). To convert logits to probabilities, you typically apply a softmax function.
         """
         model.compile(
             optimizer=optimizer,
