@@ -67,16 +67,16 @@ This creates a Keras model and a saved (serialized) tokenizer with the same name
 -rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
 ```
 
-With these hyperparameters and inputs 1 epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
+One epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
 
-Some results from a model trained for 3 epochs at different temperatures:
+Some results from a model trained for 3 epochs with ~100K tokens, generated at different temperatures:
 
 * This is a test the contract gave a revenue of up to 300 million in the course five years
 * This is a test the hurricane began to turn more northwestward in response to a high pressure system weakening to its north
 * this is a test right when reubens begins to snap danny out of hypnosis crush
 * this is a test it pond and the route wanted of what is today on july 21 humor and is according to burn for 21 although there
 
-Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and that overfitting may be occuring.
+Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and and/or that overfitting may be occuring.
 
 ### Generate using an existing model
 
