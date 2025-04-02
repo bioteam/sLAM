@@ -59,7 +59,7 @@ Download and clean *wikitext-2-v1*, create a model, train the model with 1% of t
 python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
 ```
 
-This creates a Keras model and a saved tokenizer with the same name, and a histogram of sentence lengths. for example:
+This creates a Keras model and a saved (serialized) tokenizer with the same name, and a histogram of sentence lengths. for example:
 
 ```sh
 -rw-r--r--   332M Apr  1 05:09 04-01-2025-05-09-04.keras
@@ -76,11 +76,11 @@ Some results from a model trained for 3 epochs at different temperatures:
 * this is a test right when reubens begins to snap danny out of hypnosis crush
 * this is a test it pond and the route wanted of what is today on july 21 humor and is according to burn for 21 although there
 
-These examples suggest that the model is "memorizing" rather than generating novel text at lower temperatures. It's likely that the training data set is too small, and that overfitting may be occuring.
+Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and that overfitting may be occuring.
 
 ### Generate using an existing model
 
-Supply the name of the model and the saved tokenizer, and a prompt:
+Supply the name of the model and the serialized tokenizer, and a prompt:
 
 ```sh
 python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
@@ -92,5 +92,5 @@ python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 * Use validation loss as a metric for *early_stopping*.
 * Experiment with larger input texts.
 * Handle end-of-sentence (EOS) correctly.
-* Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored.
-* Optional: Add subword tokenization capability.
+* Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored during generation.
+* Optional, out of curiousity: Add subword tokenization capability.
