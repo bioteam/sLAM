@@ -92,7 +92,9 @@ class slam_builder:
 
         Multi-Head Attention
 
-        Multi-head attention is a key component of transformer models that allows them to focus on different parts of input sequences simultaneously. Here's how it works: Rather than having a single attention mechanism (one "head"), multi-head attention runs multiple attention operations in parallel. Each head can focus on different aspects of the input. The process:
+        Multi-head attention is a key component of transformer models that allows them to focus on different parts of input sequences simultaneously.
+        Here's how it works: Rather than having a single attention mechanism (one "head"), multi-head attention runs multiple attention operations in
+        parallel. Each head can focus on different aspects of the input. The process:
 
         1. Input Transformation: The input is projected into multiple sets of queries (Q), keys (K), and values (V) using different learned projection matrices
 
@@ -105,6 +107,70 @@ class slam_builder:
 
         4. Final Projection: The concatenated output goes through a final linear projection
 
+
+        Attention is a mechanism that allows neural networks to focus selectively on relevant parts of input data when performing a task.
+        It mimics human cognitive attention by dynamically weighting the importance of different elements in a sequence or set of features.
+        How Attention Works:
+
+        Query, Key, Value (QKV) Framework:
+        Query: What the model is looking for
+        Key: What could be matched against
+        Value: Information to be extracted if there's a match
+
+        Attention Computation:
+        Calculate similarity/relevance scores between query and each key
+        Apply softmax to convert scores to probabilities (weights)
+        Produce weighted sum of values based on these weights
+        Mathematical Representation
+
+        Attention(Q, K, V) = softmax(QK^T/√d_k)V
+
+        Where:
+
+        Q = query matrix
+        K = key matrix
+        V = value matrix
+        d_k = dimension of keys (scaling factor)
+
+        Types of Attention
+
+        Self-Attention:
+        Each position attends to all positions in the same sequence
+        Allows modeling relationships between elements within the same input
+        Core component in Transformers and foundation for modern LLMs
+
+        Cross-Attention:
+        Attends between elements of different sequences (e.g., source and target in translation)
+        Common in encoder-decoder architectures
+
+        Multi-Head Attention:
+        Runs multiple attention mechanisms in parallel
+        Each "head" can focus on different aspects of relationships
+        Outputs are concatenated and linearly transformed
+
+        Why Attention Matters
+
+        - Handles variable-length inputs without information loss
+        - Captures long-range dependencies that RNNs struggle with
+        - Provides interpretability through attention weights visualization
+        - Enables parallelization unlike sequential RNN processing
+        - Solves vanishing gradient problems in long sequences
+
+        Historical Impact
+
+        Revolutionized NLP after introduction in "Attention Is All You Need" paper (2017)
+        Enabled development of Transformers, BERT, GPT and other modern architectures
+        Largely replaced RNNs and LSTMs for sequence modeling tasks
+
+        Applications Beyond Text
+
+        Computer Vision: Visual attention for image processing
+        Multimodal Models: Connecting different data modalities
+        Reinforcement Learning: Focusing on relevant state features
+        Graph Neural Networks: Attending to important nodes/edges
+
+        Attention has become one of the most fundamental building blocks in modern deep learning architectures,
+        particularly for any task involving sequential or structured data.
         """
         # Multi-head attention
         attn_output = layers.MultiHeadAttention(
