@@ -73,7 +73,6 @@ class slam_builder:
         if len(physical_devices) > 0:
             tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-    # Define the transformer block
     def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
         """transformer_block
 
@@ -158,7 +157,7 @@ class slam_builder:
 
         Historical Impact
 
-        Revolutionized NLP after introduction in "Attention Is All You Need" paper (2017)
+        Revolutionized NLP after introduction in "Attention Is All You Need" paper
         Enabled development of Transformers, BERT, GPT and other modern architectures
         Largely replaced RNNs and LSTMs for sequence modeling tasks
 
