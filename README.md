@@ -76,7 +76,7 @@ Some results from a model trained for 3 epochs with ~100K tokens, generated at d
 * this is a test right when reubens begins to snap danny out of hypnosis crush
 * this is a test it pond and the route wanted of what is today on july 21 humor and is according to burn for 21 although there
 
-Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and and/or that overfitting may be occuring.
+Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and/or that overfitting may be occuring.
 
 ### Generate using an existing model
 

@@ -168,7 +168,7 @@ class slam_builder:
         Reinforcement Learning: Focusing on relevant state features
         Graph Neural Networks: Attending to important nodes/edges
 
-        Attention has become one of the most fundamental building blocks in modern deep learning architectures,
+        Attention has become one of the most fundamental building blocks in modern DL architectures,
         particularly for any task involving sequential or structured data.
         """
         # Multi-head attention
@@ -319,7 +319,7 @@ class slam_builder:
     def create_tokenizer(self):
         """create_tokenizer
 
-        Creates a TextVectorization tokenizer and sets the maximum vocabulary size and sequence length.
+        Creates a TextVectorization tokenizer and sets the maximum token number and sequence length.
         Any tokens that are less frequent and fall outside the vocabulary limit will be replaced with an
         out-of-vocabulary token.
 
@@ -481,7 +481,6 @@ class slam_builder:
 
         return dataset
 
-    # Custom training function with callbacks
     def train_model(
         self,
         train_dataset,
