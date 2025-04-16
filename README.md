@@ -69,6 +69,14 @@ This creates a Keras model and a saved (serialized) tokenizer with the same name
 
 One epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
 
+### Generate using an existing model
+
+Supply the name of the model and the serialized tokenizer, and a prompt:
+
+```sh
+python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
+```
+
 Some results from a model trained for 3 epochs with ~100K tokens, generated at different temperatures:
 
 * This is a test the contract gave a revenue of up to 300 million in the course five years
@@ -78,19 +86,16 @@ Some results from a model trained for 3 epochs with ~100K tokens, generated at d
 
 Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and/or that overfitting may be occuring.
 
-### Generate using an existing model
+When the model is trained on ~1M tokens the generated text starts to look more syntactically correct, with less memorization:
 
-Supply the name of the model and the serialized tokenizer, and a prompt:
-
-```sh
-python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
-```
+* This is a test however information shannon argued that it is not feasible for any computer to actually do this
+* This is a test the fourth attacked title was the first ship in the play s performance of the winner in the uk and was released as part of the season
+* This is a test a video posted to youtube called code of conduct outlined twenty two rules to follow when protesting and kakapo from a urged
 
 ## To Do
 
 * Add a validation dataset to test validation loss and other metrics.
 * Use validation loss as a metric for *early_stopping*.
-* Experiment with larger input texts.
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored during generation.
 * Optional, out of curiousity: Add subword tokenization capability.
