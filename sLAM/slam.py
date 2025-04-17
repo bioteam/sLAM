@@ -768,12 +768,8 @@ class slam_builder:
         prompt_ids = np.array(prompt_ids)
         prompt_ids = prompt_ids.reshape(1, -1)  # Add batch dimension
 
-        """Generate text token by token"""
-        for _ in range(max_length):
-            predictions = model.predict(prompt_ids, verbose=0)[0]
-
-            # Get the predictions for the last token
-            """ 
+        """Generate text token by token
+            
             Low temperature (0.1-0.5):
 
             - More deterministic, predictable outputs
@@ -794,25 +790,32 @@ class slam_builder:
 
             Formula: P(token_i) = softmax(logits_i / temperature)
             """
-            predictions = predictions[-1] / temperature
-            predicted_id = tf.random.categorical(
-                tf.expand_dims(predictions, 0), num_samples=1
-            )[-1, 0].numpy()
+        for _ in range(max_length):
+            # Get predictions from model
+            predictions = model.predict(prompt_ids, verbose=0)[0][-1]
 
-            # Update the input ids
+            # Apply temperature scaling
+            scaled_predictions = predictions / temperature
+
+            # Sample next token
+            predicted_id = tf.random.categorical(
+                tf.expand_dims(scaled_predictions, 0), num_samples=1
+            )[0, 0].numpy()
+
+            # Update input context by shifting left and adding new token
             prompt_ids = np.roll(prompt_ids, -1, axis=1)
             prompt_ids[0, -1] = predicted_id
 
+            # Convert token to word and append to result
             word = self.id_to_word(predicted_id)
             if word:
                 prompt += " " + word
-            else:
-                if self.verbose:
-                    print(f"generate_text() - no token for id {predicted_id}")
 
-            # Stop if we generate an end token
-            if word == "<EOS>":
-                break
+                # Stop if we generate an end token
+                if word == "<EOS>":
+                    break
+            elif self.verbose:
+                print(f"generate_text() - no token for id {predicted_id}")
 
         return prompt
 
