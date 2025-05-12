@@ -62,12 +62,6 @@ class slam_builder:
         self.epochs = epochs
         self.batch_size = batch_size
 
-        """
-        Mixed precision training
-        policy = tf.keras.mixed_precision.Policy('mixed_float16')
-        tf.keras.mixed_precision.set_global_policy(policy)
-        """
-
         # Set memory growth to avoid OOM issues
         physical_devices = tf.config.list_physical_devices("GPU")
         if len(physical_devices) > 0:
@@ -92,7 +86,7 @@ class slam_builder:
         Multi-Head Attention
 
         Multi-head attention is a key component of transformer models that allows them to focus on different parts of input sequences simultaneously.
-        Here's how it works: Rather than having a single attention mechanism (one "head"), multi-head attention runs multiple attention operations in
+        Rather than having a single attention mechanism (one "head"), multi-head attention runs multiple attention operations in
         parallel. Each head can focus on different aspects of the input. The process:
 
         1. Input Transformation: The input is projected into multiple sets of queries (Q), keys (K), and values (V) using different learned projection matrices
@@ -109,6 +103,7 @@ class slam_builder:
 
         Attention is a mechanism that allows neural networks to focus selectively on relevant parts of input data when performing a task.
         It mimics human cognitive attention by dynamically weighting the importance of different elements in a sequence or set of features.
+
         How Attention Works:
 
         Query, Key, Value (QKV) Framework:
@@ -117,6 +112,7 @@ class slam_builder:
         Value: Information to be extracted if there's a match
 
         Attention Computation:
+
         Calculate similarity/relevance scores between query and each key
         Apply softmax to convert scores to probabilities (weights)
         Produce weighted sum of values based on these weights
@@ -160,13 +156,6 @@ class slam_builder:
         Revolutionized NLP after introduction in "Attention Is All You Need" paper
         Enabled development of Transformers, BERT, GPT and other modern architectures
         Largely replaced RNNs and LSTMs for sequence modeling tasks
-
-        Applications Beyond Text
-
-        Computer Vision: Visual attention for image processing
-        Multimodal Models: Connecting different data modalities
-        Reinforcement Learning: Focusing on relevant state features
-        Graph Neural Networks: Attending to important nodes/edges
 
         Attention has become one of the most fundamental building blocks in modern DL architectures,
         particularly for any task involving sequential or structured data.
@@ -319,7 +308,7 @@ class slam_builder:
     def create_tokenizer(self):
         """create_tokenizer
 
-        Creates a TextVectorization tokenizer and sets the maximum token number and sequence length.
+        Create a Keras TextVectorization tokenizer and set the maximum token number and sequence length.
         Any tokens that are less frequent and fall outside the vocabulary limit will be replaced with an
         out-of-vocabulary token.
 
@@ -543,20 +532,21 @@ class slam_builder:
 
         steps_per_epoch = ceil(total_training_samples / batch_size)
 
-        For example:
+        For example, if you have 10,000 training samples and a batch size of 32:
 
-        If you have 10,000 training samples and a batch size of 32
         Steps per epoch = ceil(10,000 / 32) = 313 steps
+
         Factors affecting the number of steps:
 
         Dataset size: Larger datasets require more steps
         Batch size: Smaller batches mean more steps per epoch
         Data handling: When using data generators or tf.data pipelines, steps may be explicitly set
         Distributed training: With multiple GPUs/TPUs, effective batch size increases, reducing steps
+
         In frameworks like TensorFlow/Keras, you can either:
 
-        Let the framework calculate steps automatically when providing a NumPy array
-        Specify steps_per_epoch manually when using generators or tf.data
+        - Let the framework calculate steps automatically when providing a NumPy array
+        - Specify steps per epoch manually when using generators or tf.data
 
         "Samples" in the Context of a GPT-2 Style LLM
 
@@ -585,6 +575,7 @@ class slam_builder:
         A book might be tokenized into 50,000 tokens
         This could be divided into ~98 samples of 512 tokens each
         These samples become the training examples
+
         So when calculating steps per epoch:
 
         steps_per_epoch = ceil(number_of_sequences / batch_size)
@@ -613,9 +604,11 @@ class slam_builder:
 
         """        
         Logits in neural networks: When your model makes a prediction for the next token in a sequence, 
-        it outputs a vector of real numbers (one for each token in your vocabulary). These raw output values are called "logits".
+        it outputs a vector of real numbers (one for each token in your vocabulary). 
+        These raw output values are called "logits".
 
-        Relationship to probabilities: Logits are not probabilities - they can be any real number (positive, negative, or zero). To convert logits to probabilities, you typically apply a softmax function.
+        Relationship to probabilities: Logits are not probabilities - they can be any real number 
+        (positive, negative, or zero). To convert logits to probabilities, you typically apply a softmax function.
         """
         model.compile(
             optimizer=optimizer,
@@ -766,7 +759,8 @@ class slam_builder:
             ) + prompt_ids
 
         prompt_ids = np.array(prompt_ids)
-        prompt_ids = prompt_ids.reshape(1, -1)  # Add batch dimension
+        # Add batch dimension
+        prompt_ids = prompt_ids.reshape(1, -1)
 
         """Generate text token by token
             
