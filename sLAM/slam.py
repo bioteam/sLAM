@@ -631,6 +631,16 @@ class slam_builder:
         """
         return self.index_word.get(token_id, None)
 
+    def create_index(self):
+        """create_index
+
+        Create an index for decoding
+        """
+        self.index_word = {
+            index: word
+            for index, word in enumerate(self.tokenizer.get_vocabulary())
+        }
+
     # Function to generate text
     def generate_text(
         self,
