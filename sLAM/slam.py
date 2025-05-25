@@ -409,6 +409,52 @@ class slam_builder:
 
         return text
 
+    def analyze_text(self, sentences):
+        """analyze_text
+
+        Analyze sentence lengths and create a histogram. Create a dedicated tokenizer for analysis
+        without the output_sequence_length parameter so it does not pad with 0's.
+
+        Arguments:
+            sentences -- list of strings
+
+        """
+        analysis_tokenizer = layers.TextVectorization(
+            max_tokens=50000,
+            output_mode="int",
+        )
+        analysis_tokenizer.adapt(sentences)
+
+        token_counts = []
+        for sentence in sentences:
+            tokens = analysis_tokenizer(sentence)
+            token_counts.append(len(tokens))
+
+        print(
+            f"analyze_text() - mean sentence length: {np.mean(token_counts):.1f} tokens"
+        )
+        print(
+            f"analyze_text() - median sentence length: {np.median(token_counts):.1f} tokens"
+        )
+        print(
+            f"analyze_text() - 95th percentile: {np.percentile(token_counts, 95):.1f} tokens"
+        )
+        print(
+            f"analyze_text() - 99th percentile: {np.percentile(token_counts, 99):.1f} tokens"
+        )
+        print(
+            f"analyze_text() - max sentence length: {np.max(token_counts)} tokens"
+        )
+
+        # Histogram
+        import matplotlib.pyplot as plt
+
+        plt.hist(token_counts, bins=30)
+        plt.title("Distribution of Wikipedia Sentence Lengths")
+        plt.xlabel("Number of Tokens")
+        plt.ylabel("Frequency")
+        plt.savefig("sentence_length_distribution.png")
+
     def prepare_datasets(
         self,
         texts,

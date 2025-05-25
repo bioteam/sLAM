@@ -94,8 +94,5 @@ When the model is trained on ~1M tokens the generated text starts to look more s
 
 ## To Do
 
-* Add a validation dataset to test validation loss and other metrics.
-* Use validation loss as a metric for *early_stopping*.
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored during generation.
-* Optional, out of curiousity: Add subword tokenization capability.
