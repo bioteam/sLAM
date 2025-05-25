@@ -5,12 +5,15 @@ import os
 import random
 import sys
 import time
-import json
+import pickle
 import nltk
 from tensorflow.keras import layers  # type: ignore
+from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
+from tensorflow.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
+from tensorflow.keras.losses import SparseCategoricalCrossentropy  # type: ignore
 from sklearn.model_selection import train_test_split
 
 
@@ -244,7 +247,7 @@ class slam_builder:
         logits = layers.Dense(self.vocab_size, name="logits")(x)
 
         # Create model
-        model = tf.keras.Model(inputs=input_ids, outputs=logits)
+        model = Model(inputs=input_ids, outputs=logits)
         return model
 
     # Create a simple tokenizer
@@ -263,7 +266,7 @@ class slam_builder:
                 "create_tokenizer(): initialize a tokenizer (tf.keras.layers.TextVectorization) and set the sequence length"
             )
 
-        self.tokenizer = tf.keras.layers.TextVectorization(
+        self.tokenizer = layers.TextVectorization(
             max_tokens=50000,
             output_mode="int",
             output_sequence_length=self.context_size + 1,
@@ -554,7 +557,7 @@ class slam_builder:
         checkpoint_prefix = os.path.join(
             checkpoint_dir, "ckpt_{epoch}.weights.h5"
         )
-        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_prefix, save_weights_only=True
         )
 
@@ -567,19 +570,17 @@ class slam_builder:
         """
         model.compile(
             optimizer=optimizer,
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(
-                from_logits=True
-            ),
+            loss=SparseCategoricalCrossentropy(from_logits=True),
             metrics=["accuracy"],
         )
-        early_stopping = tf.keras.callbacks.EarlyStopping(
+        early_stopping = EarlyStopping(
             monitor="val_loss",
             patience=3,
             restore_best_weights=True,
             verbose=1,
         )
 
-        # Train model\
+        # Train model
         validation_callback = ValidationPrintCallback(val_dataset)
         self.history = model.fit(
             train_dataset,
@@ -614,13 +615,10 @@ class slam_builder:
         model.save(f"{self.name}.keras")
         if self.verbose:
             print(f"save(): saved Keras model ({self.name}.keras)")
-
-        # with open(f"{self.name}.json", "w", encoding="utf-8") as f:
-        #     f.write(json.dumps(self.index_word))
-        # if self.verbose:
-        #     print(
-        #         f"save(): saved JSON file ({self.name}.json) with int-to-word decoding and metadata"
-        #     )
+        with open(f"{self.name}.pickle", "wb") as p:
+            pickle.dump(self.tokenizer, p, protocol=pickle.HIGHEST_PROTOCOL)
+        if self.verbose:
+            print(f"save() - saved tokenizer ({self.name}.pickle)")
 
     def id_to_word(self, token_id):
         """id_to_word
