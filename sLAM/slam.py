@@ -759,6 +759,19 @@ class slam_builder:
         """For example: 'As a liquid , xenon has a density of up to 3 @.' """
         return sentences
 
+    def load(self, name):
+        self.name = name
+        if not os.path.exists(f"{self.name}.pickle"):
+            sys.exit(f"Tokenizer pickle file not found: {self.name}.pickle")
+        with open(f"{self.name}.pickle", "rb") as f:
+            self.tokenizer = pickle.load(f)
+        self.create_index()
+
+        if not os.path.exists(f"{self.name}.keras"):
+            sys.exit(f"Model file not found: {self.name}.keras")
+        model = tf.keras.models.load_model(f"{self.name}.keras")
+        return model
+
 
 class ValidationPrintCallback(tf.keras.callbacks.Callback):
     def __init__(self, validation_data):
