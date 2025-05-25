@@ -644,8 +644,8 @@ class slam_builder:
     # Function to generate text
     def generate_text(
         self,
-        model,
         prompt,
+        model,
         max_length: int = 100,
         temperature=None,
     ):
@@ -794,44 +794,3 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
         print(f"\nValidation results {epoch}:")
         for name, value in zip(metric_names, val_results):
             print(f"val_{name}: {value:.4f}")
-
-
-# class slam_generator:
-#     def __init__(self, name):
-#         self.name = name
-#         if not os.path.exists(f"{self.name}.json"):
-#             sys.exit(f"Tokenizer JSON file not found: {self.name}.json")
-#         with open(f"{self.name}.json", "r", encoding="utf-8") as f:
-#             tokenizer_json = f.read()
-#             self.tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(
-#                 tokenizer_json
-#             )
-#         if not os.path.exists(f"{self.name}.keras"):
-#             sys.exit(f"Model file not found: {self.name}.keras")
-#         self.model = tf.keras.models.load_model(f"{self.name}.keras")
-
-#         self.index_word = {
-#             index: word for word, index in self.tokenizer.word_index.items()
-#         }
-
-#         # Check tokenizer vocabulary size
-#         import json
-
-#         tokenizer_config = json.loads(tokenizer_json)
-#         print(
-#             f"Vocabulary size: {tokenizer_config.get('config', {}).get('num_words', len(tokenizer_config.get('word_index', {})))}"
-#         )
-#         print(
-#             f"Sample tokens: {list(tokenizer_config.get('word_index', {}).items())[:10]}"
-#         )
-
-#         # Verify the ID for <UNK> token
-#         print(
-#             f"<UNK> token id: {tokenizer_config.get('word_index', {}).get('<UNK>', 'Not found')}"
-#         )
-
-#     # 4. Function to convert a single ID to a word
-#     def id_to_word(self, token_id):
-#         return self.index_word.get(
-#             token_id, ""
-#         )  # Return empty string if ID not found
