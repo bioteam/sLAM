@@ -69,11 +69,24 @@ builder.create_tokenizer()
 
 builder.adapt(texts)
 
+<<<<<<< HEAD
 train_dataset, val_dataset = builder.prepare_datasets(texts)
 
 model = builder.create_small_gpt2_model()
 
 builder.train_model(train_dataset, val_dataset, model)
+=======
+if args.verbose:
+    builder.analyze_text(texts)
+
+# train_dataset, val_dataset = builder.prepare_datasets(texts)
+train_dataset = builder.prepare_datasets(texts)
+
+model = builder.create_small_gpt2_model()
+
+# builder.train_model(train_dataset, val_dataset, model)
+model = builder.train_model(train_dataset, model)
+>>>>>>> b17f7c31dfce7d1ec5e6b4084bfdae132fe65b94
 
 if args.verbose:
     model.summary()
@@ -82,7 +95,7 @@ if args.verbose:
     print(f"Number of tokens: {builder.num_tokens}")
 
 result = builder.generate_text(
-    model, args.prompt, temperature=args.temperature
+    args.prompt, model, temperature=args.temperature
 )
 print(f"Result: {result}")
 
