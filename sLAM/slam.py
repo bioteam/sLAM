@@ -77,14 +77,8 @@ class slam_builder:
 
         """ Check for GPUs and configure GPU memory growth """
         gpus = tf.config.list_physical_devices("GPU")
-        if gpus:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-                print(f"GPU: {gpu}")
-                # Check memory allocation
-                print(tf.config.experimental.get_memory_info(gpu))
-        else:
-            print("No GPUs found")
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
 
     def transformer_block(self, x):
         """transformer_block
