@@ -85,17 +85,13 @@ class slam_builder:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
 
-    def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
+    def transformer_block(self, x):
         """transformer_block
 
         A standard transformer block with multi-head attention and feed-forward network.
 
         Arguments:
             x -- Input tensor to the transformer block
-            n_heads -- Number of attention heads to use
-            d_model -- Dimension of the model/embedding
-            d_ff -- Dimension of the feedforward network
-            dropout_rate -- Rate for dropout regularization
 
         Returns:
             x -- Transformed tensor with the same shape as the input but processed through
@@ -180,7 +176,9 @@ class slam_builder:
         """
         # Multi-head attention
         attn_output = layers.MultiHeadAttention(
-            num_heads=n_heads, key_dim=d_model // n_heads, dropout=dropout_rate
+            num_heads=self.n_heads,
+            key_dim=self.d_model // self.n_heads,
+            dropout=self.dropout_rate,
         )(x, x, x, use_causal_mask=True)
 
         # Residual connection and layer norm
@@ -188,9 +186,9 @@ class slam_builder:
         x = layers.LayerNormalization(epsilon=1e-6)(x)
 
         # Feed forward network
-        ff_output = layers.Dense(d_ff, activation="gelu")(x)
-        ff_output = layers.Dense(d_model)(ff_output)
-        ff_output = layers.Dropout(dropout_rate)(ff_output)
+        ff_output = layers.Dense(self.d_ff, activation="gelu")(x)
+        ff_output = layers.Dense(self.d_model)(ff_output)
+        ff_output = layers.Dropout(self.dropout_rate)(ff_output)
 
         # Second residual connection and layer norm
         x = layers.Add()([x, ff_output])
@@ -311,9 +309,7 @@ class slam_builder:
 
         # Transformer blocks
         for i in range(self.n_layers):
-            x = self.transformer_block(
-                x, self.n_heads, self.d_model, self.d_ff, self.dropout_rate
-            )
+            x = self.transformer_block(x)
 
         # Output projection
         logits = layers.Dense(self.vocab_size, name="logits")(x)
