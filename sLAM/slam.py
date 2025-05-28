@@ -75,15 +75,16 @@ class slam_builder:
         self.batch_size = batch_size
         self.dtype = dtype
 
-        # Set memory growth to avoid OOM issues
-        # physical_devices = tf.config.list_physical_devices("GPU")
-        # if len(physical_devices) > 0:
-        #    tf.config.experimental.set_memory_growth(physical_devices[0], True)
-
-        # Configure GPU memory growth
+        """ Check for GPUs and configure GPU memory growth """
         gpus = tf.config.list_physical_devices("GPU")
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                print(f"GPU: {gpu}")
+                # Check memory allocation
+                print(tf.config.experimental.get_memory_info(gpu))
+        else:
+            print("No GPUs found")
 
     def transformer_block(self, x):
         """transformer_block
