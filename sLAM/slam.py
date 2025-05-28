@@ -11,6 +11,7 @@ import sys
 import time
 import pickle
 import nltk
+import re
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -34,7 +35,7 @@ class slam_builder:
         self,
         verbose: bool = False,
         name: str = None,
-        vocab_size: int = 10000,
+        vocab_size: int = 50000,
         context_size: int = 128,
         # Equivalent to embedding_dimension
         d_model: int = 256,
@@ -42,10 +43,10 @@ class slam_builder:
         n_heads: int = 4,
         d_ff: int = 1024,
         dropout_rate: float = 0.1,
-        epochs: int = 1,
+        epochs: int = 3,
         batch_size: int = 4,
         dtype: str = "int32",
-        learning_rate: float = 5e-5,
+        learning_rate: float = 1e-5,
     ):
         """__init__
 
@@ -473,6 +474,9 @@ class slam_builder:
         )
         print(
             f"analyze_text() - max sentence length: {np.max(token_counts)} tokens"
+        )
+        print(
+            f"analyze_text() - min sentence length: {np.min(token_counts)} tokens"
         )
 
         # Histogram
@@ -924,6 +928,8 @@ class slam_builder:
                     and "http" not in sentence
                     and len(sentence) > min_sentence_len
                 ):
+                    # The nltk tokenizer introduces spaces
+                    sentence = re.sub(r"\s+([.,?!:;'])", r"\1", sentence)
                     sentences.append(sentence)
         if self.verbose:
             print(
