@@ -3,6 +3,7 @@ import os
 # Set before importing TensorFlow
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 import tensorflow as tf
+
 import numpy as np
 import glob
 import random
@@ -18,6 +19,8 @@ from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: 
 from tensorflow.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
 from tensorflow.keras.losses import SparseCategoricalCrossentropy  # type: ignore
 from sklearn.model_selection import train_test_split
+
+tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
 
 class slam_builder:
