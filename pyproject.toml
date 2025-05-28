@@ -21,6 +21,7 @@ keras = ">=2.8.0"
 datasets = '*'
 nltk = '*'
 matplotlib = '*'
+scikit-learn = '*'
 
 [build-system]
 requires = ["poetry-core"]

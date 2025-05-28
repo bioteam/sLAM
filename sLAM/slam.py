@@ -29,7 +29,7 @@ class slam_builder:
         verbose: bool = False,
         name: str = None,
         vocab_size: int = 50000,
-        context_size: int = 256,
+        context_size: int = 128,
         d_model: int = 256,
         n_layers: int = 4,
         n_heads: int = 4,
@@ -37,6 +37,7 @@ class slam_builder:
         dropout_rate: float = 0.1,
         epochs: int = 1,
         batch_size: int = 4,
+        dtype: str = 'tf.int32'
     ):
         """__init__
 
@@ -65,11 +66,18 @@ class slam_builder:
         self.dropout_rate = dropout_rate
         self.epochs = epochs
         self.batch_size = batch_size
+	self.dtype = dtype
 
         # Set memory growth to avoid OOM issues
-        physical_devices = tf.config.list_physical_devices("GPU")
-        if len(physical_devices) > 0:
-            tf.config.experimental.set_memory_growth(physical_devices[0], True)
+        #physical_devices = tf.config.list_physical_devices("GPU")
+        #if len(physical_devices) > 0:
+        #    tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+        # Configure GPU memory growth
+        gpus = tf.config.list_physical_devices('GPU')
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+
 
     def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
         """transformer_block
@@ -328,7 +336,8 @@ class slam_builder:
         self.tokenizer = layers.TextVectorization(
             max_tokens=50000,
             output_mode="int",
-            output_sequence_length=self.context_size + 1,
+            output_sequence_length=self.context_size,
+            dtype=self.dtype
         )
         """
         The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
