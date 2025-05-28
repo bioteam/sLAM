@@ -31,8 +31,9 @@ class slam_builder:
         self,
         verbose: bool = False,
         name: str = None,
-        vocab_size: int = 50000,
+        vocab_size: int = 10000,
         context_size: int = 128,
+        # Equivalent to embedding_dimennsion
         d_model: int = 256,
         n_layers: int = 4,
         n_heads: int = 4,
