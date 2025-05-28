@@ -75,6 +75,8 @@ model = builder.create_small_gpt2_model()
 
 model = builder.train_model(train_dataset, val_dataset, model)
 
+builder.save(model)
+
 if args.verbose:
     model.summary()
     embedding_layer = model.get_layer("token_embeddings")
@@ -86,5 +88,3 @@ result = builder.generate_text(
     args.prompt, model, temperature=args.temperature
 )
 print(f"Result: {result}")
-
-builder.save(model)
