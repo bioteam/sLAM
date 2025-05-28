@@ -1,7 +1,10 @@
+import os
+
+# Set before importing TensorFlow
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 import tensorflow as tf
 import numpy as np
 import glob
-import os
 import random
 import sys
 import time
