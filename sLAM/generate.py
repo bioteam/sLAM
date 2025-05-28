@@ -24,7 +24,7 @@ parser.add_argument(
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
 
-generator = slam_builder()
+generator = slam_builder(verbose=args.verbose)
 
 model = generator.load(args.name)
 

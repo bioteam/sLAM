@@ -73,13 +73,14 @@ train_dataset, val_dataset = builder.prepare_datasets(texts)
 
 model = builder.create_small_gpt2_model()
 
-builder.train_model(train_dataset, val_dataset, model)
+model = builder.train_model(train_dataset, val_dataset, model)
 
 if args.verbose:
     model.summary()
     embedding_layer = model.get_layer("token_embeddings")
     print(f"Vocabulary size: {embedding_layer.input_dim}")
     print(f"Number of tokens: {builder.num_tokens}")
+
 
 result = builder.generate_text(
     args.prompt, model, temperature=args.temperature
