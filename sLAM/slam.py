@@ -37,7 +37,7 @@ class slam_builder:
         dropout_rate: float = 0.1,
         epochs: int = 1,
         batch_size: int = 4,
-        dtype: str = 'tf.int32'
+        dtype: str = "tf.int32",
     ):
         """__init__
 
@@ -66,18 +66,17 @@ class slam_builder:
         self.dropout_rate = dropout_rate
         self.epochs = epochs
         self.batch_size = batch_size
-	self.dtype = dtype
+        self.dtype = dtype
 
         # Set memory growth to avoid OOM issues
-        #physical_devices = tf.config.list_physical_devices("GPU")
-        #if len(physical_devices) > 0:
+        # physical_devices = tf.config.list_physical_devices("GPU")
+        # if len(physical_devices) > 0:
         #    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
         # Configure GPU memory growth
-        gpus = tf.config.list_physical_devices('GPU')
+        gpus = tf.config.list_physical_devices("GPU")
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
-
 
     def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
         """transformer_block
@@ -337,7 +336,7 @@ class slam_builder:
             max_tokens=50000,
             output_mode="int",
             output_sequence_length=self.context_size,
-            dtype=self.dtype
+            dtype=self.dtype,
         )
         """
         The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
