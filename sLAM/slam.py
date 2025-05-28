@@ -1,7 +1,10 @@
+import os
+
+# Set before importing TensorFlow
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 import tensorflow as tf
 import numpy as np
 import glob
-import os
 import random
 import sys
 import time
@@ -37,7 +40,7 @@ class slam_builder:
         dropout_rate: float = 0.1,
         epochs: int = 1,
         batch_size: int = 4,
-        dtype: str = "tf.int32",
+        dtype: str = "int32",
     ):
         """__init__
 
