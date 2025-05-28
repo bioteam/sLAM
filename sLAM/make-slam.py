@@ -65,6 +65,9 @@ elif args.input_dir:
 else:
     sys.exit("No input")
 
+if args.verbose:
+    builder.analyze_text(texts)
+
 builder.create_tokenizer()
 
 builder.adapt(texts)
