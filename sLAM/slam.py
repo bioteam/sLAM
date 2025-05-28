@@ -36,7 +36,7 @@ class slam_builder:
         name: str = None,
         vocab_size: int = 10000,
         context_size: int = 128,
-        # Equivalent to embedding_dimennsion
+        # Equivalent to embedding_dimension
         d_model: int = 256,
         n_layers: int = 4,
         n_heads: int = 4,
@@ -45,6 +45,7 @@ class slam_builder:
         epochs: int = 1,
         batch_size: int = 4,
         dtype: str = "int32",
+        learning_rate: float = 5e-5,
     ):
         """__init__
 
@@ -60,6 +61,8 @@ class slam_builder:
             dropout_rate -- Rate of dropout for regularization (default: {0.1})
             epochs -- Number of training epochs (default: {1})
             batch_size -- Number of samples per training batch (default: {4})
+            dtype -- Data type for the model inputs (default: {"int32"})
+            learning_rate -- Learning rate for the optimizer (default: {5e-5})
 
         """
         self.verbose = verbose
@@ -74,6 +77,7 @@ class slam_builder:
         self.epochs = epochs
         self.batch_size = batch_size
         self.dtype = dtype
+        self.learning_rate = learning_rate
 
         """ Check for GPUs and configure GPU memory growth """
         gpus = tf.config.list_physical_devices("GPU")
@@ -201,6 +205,25 @@ class slam_builder:
 
         Returns:
             Untrained tf.Keras.model
+
+        The model has several types of layers:
+
+        - Input layer (input_ids)
+        - Token embedding layer
+        - Position embedding layer
+        - Addition layer (to combine token and position embeddings)
+        - Dropout layer (a certain percentage of the combined embedding values will be randomly set to zero, helping the model generalize better)
+        - Multiple transformer blocks (the number is determined by self.n_layers)
+        - Output dense layer (logits)
+
+        All of these layers are trainable by default in TensorFlow/Keras. The specific number of transformer blocks depends
+        on the value of self.n_layers. The transformer blocks themselves would contain multiple layers each (typically attention layers,
+        normalization layers, and feedforward networks), so the total layer count would be:
+
+        - 5 base layers (input, embeddings, add, dropout, output
+        - Plus self.n_layers * (number of layers in each transformer block)
+
+        This function creates a small GPT-2 style language model with the following parameters:
 
         The vocab_size parameter defines the total number of unique tokens
         that your language model can recognize and generate.
@@ -558,7 +581,6 @@ class slam_builder:
         train_dataset,
         val_dataset,
         model,
-        learning_rate=5e-5,
         checkpoint_dir="./checkpoints",
     ):
         """train_model
@@ -570,7 +592,6 @@ class slam_builder:
             model -- keras.src.models.functional.Functional, untrained
 
         Keyword Arguments:
-            learning_rate -- learning rate (default: {5e-5})
             checkpoint_dir -- checkpoint directory (default: {"./checkpoints"})
 
         Returns: none
@@ -665,6 +686,24 @@ class slam_builder:
         steps_per_epoch = ceil(number_of_sequences / batch_size)
 
         Where "number_of_sequences" is how many of these fixed-length token sequences you have in your training dataset.
+
+        Learning Rate
+
+        The current learning rate is 5e-5, but it could be reduced to 1e-5.
+        Reducing the learning rate typically slows down the training process. Here's why:
+
+        - Smaller Parameter Updates: Each training step will make smaller adjustments to the model parameters.
+        - More Steps Required: The model will need more steps (and therefore more epochs) to reach the same level of performance.
+        - Slower Convergence: The model will take longer to converge to an optimal solution.
+
+        Higher learning rate: Taking large steps (might reach the destination faster but could overshoot)
+        Lower learning rate: Taking small, cautious steps (takes longer but less likely to miss the target)
+
+        The benefit of a lower learning rate is that it often provides:
+
+        - More Stability: Less likely to encounter NaN values or divergence
+        - Better Final Results: May ultimately reach a better minimum, even if it takes longer
+        - Smoother Loss Curve: Less oscillation in the training/validation loss
         """
 
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -676,8 +715,8 @@ class slam_builder:
 
         """Learning rate schedule"""
         lr_schedule = PolynomialDecay(
-            initial_learning_rate=learning_rate,
-            end_learning_rate=learning_rate / 10,
+            initial_learning_rate=self.learning_rate,
+            end_learning_rate=self.learning_rate / 10,
             decay_steps=decay_steps,
         )
 
