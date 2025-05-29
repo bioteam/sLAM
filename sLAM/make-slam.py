@@ -7,14 +7,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-t",
     "--text_percentage",
-    default=100,
+    default=1,
     type=int,
-    help="Percentage of input text used to make dataset",
+    help="Percentage of download used to make dataset",
 )
 parser.add_argument(
     "-m",
     "--min_sentence_len",
-    default=100,
+    default=50,
     type=int,
     help="Percentage of input text used to make dataset",
 )
@@ -41,6 +41,9 @@ parser.add_argument(
     default=256,
     help="Number of epochs",
 )
+parser.add_argument(
+    "-d", "--download", type=str, help="Dataset to download", default="cc_news"
+)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
@@ -49,10 +52,16 @@ args = parser.parse_args()
 builder = slam_builder(
     verbose=args.verbose, name=args.name, epochs=args.epochs
 )
-wp_texts = load_dataset("wikitext", "wikitext-2-v1")
-texts = builder.clean_wikitext(
-    wp_texts, args.text_percentage, args.min_sentence_len
-)
+if args.download == "wikitext-2-v1":
+    wp_texts = load_dataset("wikitext", "wikitext-2-v1")
+    texts = builder.clean_wikitext(
+        wp_texts, args.text_percentage, args.min_sentence_len
+    )
+if args.download == "cc_news":
+    cc_texts = load_dataset(
+        "cc_news", split=f"train[:{args.text_percentage}%]"
+    )
+    texts = builder.clean_cc_news(cc_texts, args.min_sentence_len)
 
 if args.verbose:
     builder.analyze_text(texts)

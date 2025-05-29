@@ -917,6 +917,21 @@ class slam_builder:
 
         return prompt
 
+    def clean_cc_news(self, raw_texts, min_sentence_len):
+        texts = list()
+        for raw_text in raw_texts:
+            subtxts = raw_text["text"].split("\n")
+            for subtxt in subtxts:
+                alpha_count = sum(1 for char in subtxt if char.isalpha())
+                if (
+                    len(subtxt) > min_sentence_len
+                    and (alpha_count / len(subtxt)) > 0.7
+                ):
+                    texts.append(subtxt)
+        if self.verbose:
+            print(f"clean_cc_news() - number of text chunks: {len(texts)}")
+        return texts
+
     def clean_wikitext(self, raw_texts, percentage, min_sentence_len):
         sentences = list()
         texts = [t["text"].strip() for t in raw_texts["train"]]
