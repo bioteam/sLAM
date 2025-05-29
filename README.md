@@ -101,3 +101,19 @@ When the model is trained on ~1M tokens the generated text starts to look more s
 
 * Reducing the size of the input text with *-t* can eliminate OOM errors on the RTX 500.
 * Reducing the size of the embedding with *--d_model* significantly reduces training time, e.g. from 20ms/step to 5ms/step
+
+### Installing Tensorflow using a container at TACC
+
+Run an interactive job using `srun` or `idev` to download a container made by NVIDIA.
+
+```sh
+srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
+module load tacc-apptainer
+apptainer pull docker://tensorflow/tensorflow:2.17.0-gpu
+```
+
+Once the container is downloaded you can execute with `singularity`.
+
+```sh
+singularity shell --nv ~/tensorflow_2.17.0-gpu.sif
+```
