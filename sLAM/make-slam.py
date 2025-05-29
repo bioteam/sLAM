@@ -46,6 +46,12 @@ parser.add_argument(
     default=3,
     help="Number of epochs",
 )
+parser.add_argument(
+    "--d_model",
+    type=int,
+    default=256,
+    help="Number of epochs",
+)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
