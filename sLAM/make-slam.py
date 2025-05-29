@@ -81,9 +81,9 @@ if args.verbose:
     print(f"Vocabulary size: {embedding_layer.input_dim}")
     print(f"Number of tokens: {builder.num_tokens}")
 
+builder.save(model)
+
 result = builder.generate_text(
     args.prompt, model, temperature=args.temperature
 )
 print(f"Result: {result}")
-
-builder.save(model)
