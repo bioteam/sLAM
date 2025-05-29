@@ -200,6 +200,23 @@ class slam_builder:
         Returns:
             Untrained tf.Keras.model
 
+         The model has several types of layers:
+
+        - Input layer (input_ids)
+        - Token embedding layer
+        - Position embedding layer
+        - Addition layer (to combine token and position embeddings)
+        - Dropout layer (a certain percentage of the combined embedding values will be randomly set to zero, helping the model generalize better)
+        - Multiple transformer blocks (the number is determined by self.n_layers)
+        - Output dense layer (logits)
+
+        All of these layers are trainable by default in TensorFlow/Keras. The specific number of transformer blocks depends
+        on the value of self.n_layers. The transformer blocks themselves would contain multiple layers each (typically attention layers,
+        normalization layers, and feedforward networks), so the total layer count would be:
+
+        - 5 base layers (input, embeddings, add, dropout, output
+        - Plus self.n_layers * (number of layers in each transformer block)
+
         The vocab_size parameter defines the total number of unique tokens
         that your language model can recognize and generate.
         Using our example model with d_model=256:
