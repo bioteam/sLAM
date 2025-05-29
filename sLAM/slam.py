@@ -757,6 +757,7 @@ class slam_builder:
         self.history = model.fit(
             train_dataset,
             epochs=self.epochs,
+            batch_size=self.batch_size,
             callbacks=[
                 checkpoint_callback,
                 early_stopping,
