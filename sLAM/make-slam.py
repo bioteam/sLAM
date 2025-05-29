@@ -1,21 +1,9 @@
 import argparse
-import sys
 from slam import slam_builder
 from datasets import load_dataset
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-i",
-    "--input_dir",
-    help="Specify a directory with text files",
-)
-parser.add_argument(
-    "-d",
-    "--download",
-    action="store_true",
-    help="Do a text download from Hugging Face",
-)
 parser.add_argument(
     "-t",
     "--text_percentage",
@@ -24,15 +12,16 @@ parser.add_argument(
     help="Percentage of input text used to make dataset",
 )
 parser.add_argument(
+    "-m",
+    "--min_sentence_len",
+    default=100,
+    type=int,
+    help="Percentage of input text used to make dataset",
+)
+parser.add_argument(
     "-n",
     "--name",
     help="Name used to save files, default is timestamp of completion",
-)
-parser.add_argument(
-    "--min_sentence_len",
-    type=int,
-    default=32,
-    help="Mininum sentence length used in training",
 )
 parser.add_argument(
     "--temperature",
@@ -60,16 +49,10 @@ args = parser.parse_args()
 builder = slam_builder(
     verbose=args.verbose, name=args.name, epochs=args.epochs
 )
-
-if args.download:
-    raw_texts = load_dataset("wikitext", "wikitext-2-v1")
-    texts = builder.clean_wikitext(
-        raw_texts, args.text_percentage, args.min_sentence_len
-    )
-elif args.input_dir:
-    texts = builder.load_text(args.input_dir, args.text_percentage)
-else:
-    sys.exit("No input")
+wp_texts = load_dataset("wikitext", "wikitext-2-v1")
+texts = builder.clean_wikitext(
+    wp_texts, args.text_percentage, args.min_sentence_len
+)
 
 if args.verbose:
     builder.analyze_text(texts)
@@ -91,8 +74,6 @@ if args.verbose:
     embedding_layer = model.get_layer("token_embeddings")
     print(f"Vocabulary size: {embedding_layer.input_dim}")
     print(f"Number of token ids: {len(builder.token_ids)}")
-
-builder.save(model)
 
 result = builder.generate_text(
     args.prompt, model, temperature=args.temperature
