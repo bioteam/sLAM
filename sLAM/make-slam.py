@@ -46,6 +46,12 @@ parser.add_argument(
     default=3,
     help="Number of epochs",
 )
+parser.add_argument(
+    "--d_model",
+    type=int,
+    default=256,
+    help="Number of epochs",
+)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
@@ -84,8 +90,9 @@ if args.verbose:
     model.summary()
     embedding_layer = model.get_layer("token_embeddings")
     print(f"Vocabulary size: {embedding_layer.input_dim}")
-    print(f"Number of tokens: {builder.num_tokens}")
+    print(f"Number of token ids: {len(builder.token_ids)}")
 
+builder.save(model)
 
 result = builder.generate_text(
     args.prompt, model, temperature=args.temperature

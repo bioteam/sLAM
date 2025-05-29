@@ -36,8 +36,8 @@ class slam_builder:
         verbose: bool = False,
         name: str = None,
         vocab_size: int = 50000,
-        context_size: int = 128,
-        # Equivalent to embedding_dimension
+        context_size: int = 256,
+        # Same as embedding_dim:
         d_model: int = 256,
         n_layers: int = 4,
         n_heads: int = 4,
@@ -45,8 +45,7 @@ class slam_builder:
         dropout_rate: float = 0.1,
         epochs: int = 3,
         batch_size: int = 4,
-        dtype: str = "int32",
-        learning_rate: float = 1e-5,
+        learning_rate: float = 5e-5,
     ):
         """__init__
 
@@ -62,8 +61,7 @@ class slam_builder:
             dropout_rate -- Rate of dropout for regularization (default: {0.1})
             epochs -- Number of training epochs (default: {1})
             batch_size -- Number of samples per training batch (default: {4})
-            dtype -- Data type for the model inputs (default: {"int32"})
-            learning_rate -- Learning rate for the optimizer (default: {5e-5})
+            learning_rate --
 
         """
         self.verbose = verbose
@@ -77,13 +75,13 @@ class slam_builder:
         self.dropout_rate = dropout_rate
         self.epochs = epochs
         self.batch_size = batch_size
-        self.dtype = dtype
         self.learning_rate = learning_rate
 
-        """ Check for GPUs and configure GPU memory growth """
+        # Set memory growth to avoid OOM issues
         gpus = tf.config.list_physical_devices("GPU")
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
+        if len(gpus) > 0:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
 
     def transformer_block(self, x):
         """transformer_block
@@ -358,7 +356,7 @@ class slam_builder:
             max_tokens=50000,
             output_mode="int",
             output_sequence_length=self.context_size,
-            dtype=self.dtype,
+            dtype=tf.int32,
         )
         """
         The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
@@ -514,16 +512,17 @@ class slam_builder:
         """
         if self.verbose:
             print(
-                "prepare_datasets(): tokenize, prepare input and target token sequences, and create tf.data.Dataset.from_tensor_slices training and validation datasets"
+                "prepare_datasets() - tokenize, prepare input and target token sequences, and create tf.data.Dataset.from_tensor_slices training and validation datasets"
             )
         """
         Create a flat array of token IDs representing all tokens from the input texts in order. 
         """
         self.token_ids = self.tokenizer(texts).numpy().flatten()
-        self.num_tokens = len(self.token_ids)
 
         if self.verbose:
-            print(f"prepare_datasets() - number of tokens: {self.num_tokens}")
+            print(
+                f"prepare_datasets() - number of tokens: {len(self.token_ids)}"
+            )
         """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
         for i in range(0, len(self.token_ids) - self.context_size):
@@ -556,7 +555,7 @@ class slam_builder:
 
         if self.verbose:
             print(
-                f"prepare_datasets(): training samples: {len(train_inputs)}, validation samples: {len(val_inputs)}"
+                f"prepare_datasets() - training samples: {len(train_inputs)}, validation samples: {len(val_inputs)}"
             )
 
         # Create TF datasets for training and validation
@@ -575,7 +574,7 @@ class slam_builder:
         val_dataset = val_dataset.prefetch(tf.data.experimental.AUTOTUNE)
         if self.verbose:
             print(
-                f"prepare_datasets(): train_dataset is {train_dataset}, val_dataset is {val_dataset}"
+                f"prepare_datasets() - train_dataset: {train_dataset}, val_dataset: {val_dataset}"
             )
 
         return train_dataset, val_dataset
@@ -789,11 +788,11 @@ class slam_builder:
         """In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately"""
         model.save(f"{self.name}.keras")
         if self.verbose:
-            print(f"save(): saved Keras model ({self.name}.keras)")
+            print(f"save() - saved Keras model: ({self.name}.keras)")
         with open(f"{self.name}.pickle", "wb") as p:
             pickle.dump(self.tokenizer, p, protocol=pickle.HIGHEST_PROTOCOL)
         if self.verbose:
-            print(f"save() - saved tokenizer ({self.name}.pickle)")
+            print(f"save() - saved tokenizer: ({self.name}.pickle)")
 
     def id_to_word(self, token_id):
         """id_to_word
@@ -933,14 +932,14 @@ class slam_builder:
                     sentences.append(sentence)
         if self.verbose:
             print(
-                f"clean_wikitext(): total number of cleaned sentences is {len(sentences)}"
+                f"clean_wikitext() - number of cleaned sentences: {len(sentences)}"
             )
         if percentage != 100:
             num_sentences = int(len(sentences) * percentage / 100)
             sentences = random.sample(sentences, num_sentences)
         if self.verbose:
             print(
-                f"clean_wikitext(): using {percentage}% ({len(sentences)}) of the cleaned sentences for the datasets"
+                f"clean_wikitext() - using {percentage}% ({len(sentences)}) of the cleaned sentences for the datasets"
             )
         """For example: 'As a liquid , xenon has a density of up to 3 @.' """
         return sentences

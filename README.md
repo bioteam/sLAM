@@ -96,3 +96,8 @@ When the model is trained on ~1M tokens the generated text starts to look more s
 
 * Handle end-of-sentence (EOS) correctly.
 * Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored during generation.
+
+## Operating Notes
+
+* Reducing the size of the input text with *-t* can eliminate OOM errors on the RTX 500.
+* Reducing the size of the embedding with *--d_model* significantly reduces training time, e.g. from 20ms/step to 5ms/step
