@@ -36,7 +36,9 @@ class slam_builder:
         verbose: bool = False,
         name: str = None,
         vocab_size: int = 50000,
-        context_size: int = 256,
+        # context_size should be related to chunk size in tokens, which
+        # averages about 38 tokens for the cc_news data
+        context_size: int = 32,
         # Same as embedding_dim:
         d_model: int = 256,
         n_layers: int = 4,
