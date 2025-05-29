@@ -1,4 +1,5 @@
 import argparse
+import sys
 from slam import slam_builder
 from datasets import load_dataset
 
@@ -44,6 +45,12 @@ parser.add_argument(
 parser.add_argument(
     "-d", "--download", type=str, help="Dataset to download", default="cc_news"
 )
+parser.add_argument(
+    "--num_rows",
+    type=int,
+    help="Number of rows to download from cc_news",
+    default=5000,
+)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
@@ -57,11 +64,11 @@ if args.download == "wikitext-2-v1":
     texts = builder.clean_wikitext(
         wp_texts, args.text_percentage, args.min_sentence_len
     )
-if args.download == "cc_news":
-    cc_texts = load_dataset(
-        "cc_news", split=f"train[:{args.text_percentage}%]"
-    )
+elif args.download == "cc_news":
+    cc_texts = load_dataset("cc_news", split=f"train[:{args.num_rows}]")
     texts = builder.clean_cc_news(cc_texts, args.min_sentence_len)
+else:
+    sys.exit(f"Unknown download: {args.download}")
 
 if args.verbose:
     builder.analyze_text(texts)
