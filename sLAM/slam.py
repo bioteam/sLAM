@@ -1,12 +1,17 @@
+import os
+
+# Set before importing TensorFlow
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 import tensorflow as tf
+
 import numpy as np
 import glob
-import os
 import random
 import sys
 import time
 import pickle
 import nltk
+import re
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -15,6 +20,8 @@ from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: 
 from tensorflow.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
 from tensorflow.keras.losses import SparseCategoricalCrossentropy  # type: ignore
 from sklearn.model_selection import train_test_split
+
+tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
 
 class slam_builder:
@@ -76,17 +83,13 @@ class slam_builder:
             for gpu in gpus:
                 tf.config.experimental.set_memory_growth(gpu, True)
 
-    def transformer_block(self, x, n_heads, d_model, d_ff, dropout_rate):
+    def transformer_block(self, x):
         """transformer_block
 
         A standard transformer block with multi-head attention and feed-forward network.
 
         Arguments:
             x -- Input tensor to the transformer block
-            n_heads -- Number of attention heads to use
-            d_model -- Dimension of the model/embedding
-            d_ff -- Dimension of the feedforward network
-            dropout_rate -- Rate for dropout regularization
 
         Returns:
             x -- Transformed tensor with the same shape as the input but processed through
@@ -171,7 +174,9 @@ class slam_builder:
         """
         # Multi-head attention
         attn_output = layers.MultiHeadAttention(
-            num_heads=n_heads, key_dim=d_model // n_heads, dropout=dropout_rate
+            num_heads=self.n_heads,
+            key_dim=self.d_model // self.n_heads,
+            dropout=self.dropout_rate,
         )(x, x, x, use_causal_mask=True)
 
         # Residual connection and layer norm
@@ -179,9 +184,9 @@ class slam_builder:
         x = layers.LayerNormalization(epsilon=1e-6)(x)
 
         # Feed forward network
-        ff_output = layers.Dense(d_ff, activation="gelu")(x)
-        ff_output = layers.Dense(d_model)(ff_output)
-        ff_output = layers.Dropout(dropout_rate)(ff_output)
+        ff_output = layers.Dense(self.d_ff, activation="gelu")(x)
+        ff_output = layers.Dense(self.d_model)(ff_output)
+        ff_output = layers.Dropout(self.dropout_rate)(ff_output)
 
         # Second residual connection and layer norm
         x = layers.Add()([x, ff_output])
@@ -200,7 +205,7 @@ class slam_builder:
         Returns:
             Untrained tf.Keras.model
 
-         The model has several types of layers:
+        The model has several types of layers:
 
         - Input layer (input_ids)
         - Token embedding layer
@@ -216,6 +221,8 @@ class slam_builder:
 
         - 5 base layers (input, embeddings, add, dropout, output
         - Plus self.n_layers * (number of layers in each transformer block)
+
+        This function creates a small GPT-2 style language model with the following parameters:
 
         The vocab_size parameter defines the total number of unique tokens
         that your language model can recognize and generate.
@@ -319,9 +326,7 @@ class slam_builder:
 
         # Transformer blocks
         for i in range(self.n_layers):
-            x = self.transformer_block(
-                x, self.n_heads, self.d_model, self.d_ff, self.dropout_rate
-            )
+            x = self.transformer_block(x)
 
         # Output projection
         logits = layers.Dense(self.vocab_size, name="logits")(x)
@@ -350,7 +355,8 @@ class slam_builder:
         self.tokenizer = layers.TextVectorization(
             max_tokens=50000,
             output_mode="int",
-            output_sequence_length=self.context_size + 1,
+            output_sequence_length=self.context_size,
+            dtype=tf.int32,
         )
         """
         The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
@@ -683,6 +689,24 @@ class slam_builder:
         steps_per_epoch = ceil(number_of_sequences / batch_size)
 
         Where "number_of_sequences" is how many of these fixed-length token sequences you have in your training dataset.
+
+        Learning Rate
+
+        The current learning rate is 5e-5, but it could be reduced to 1e-5.
+        Reducing the learning rate typically slows down the training process. Here's why:
+
+        - Smaller Parameter Updates: Each training step will make smaller adjustments to the model parameters.
+        - More Steps Required: The model will need more steps (and therefore more epochs) to reach the same level of performance.
+        - Slower Convergence: The model will take longer to converge to an optimal solution.
+
+        Higher learning rate: Taking large steps (might reach the destination faster but could overshoot)
+        Lower learning rate: Taking small, cautious steps (takes longer but less likely to miss the target)
+
+        The benefit of a lower learning rate is that it often provides:
+
+        - More Stability: Less likely to encounter NaN values or divergence
+        - Better Final Results: May ultimately reach a better minimum, even if it takes longer
+        - Smoother Loss Curve: Less oscillation in the training/validation loss
         """
 
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -903,6 +927,8 @@ class slam_builder:
                     and "http" not in sentence
                     and len(sentence) > min_sentence_len
                 ):
+                    # The nltk tokenizer introduces spaces
+                    sentence = re.sub(r"\s+([.,?!:;'])", r"\1", sentence)
                     sentences.append(sentence)
         if self.verbose:
             print(

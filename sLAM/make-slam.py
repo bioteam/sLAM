@@ -71,6 +71,9 @@ elif args.input_dir:
 else:
     sys.exit("No input")
 
+if args.verbose:
+    builder.analyze_text(texts)
+
 builder.create_tokenizer()
 
 builder.adapt(texts)
@@ -79,13 +82,15 @@ train_dataset, val_dataset = builder.prepare_datasets(texts)
 
 model = builder.create_small_gpt2_model()
 
-builder.train_model(train_dataset, val_dataset, model)
+model = builder.train_model(train_dataset, val_dataset, model)
+
+builder.save(model)
 
 if args.verbose:
     model.summary()
     embedding_layer = model.get_layer("token_embeddings")
     print(f"Vocabulary size: {embedding_layer.input_dim}")
-    print(f"Number of tokens: {builder.num_tokens}")
+    print(f"Number of token ids: {len(builder.token_ids)}")
 
 builder.save(model)
 
