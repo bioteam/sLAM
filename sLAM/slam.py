@@ -36,8 +36,6 @@ class slam_builder:
         verbose: bool = False,
         name: str = None,
         vocab_size: int = 50000,
-        # context_size should be related to chunk size in tokens, which
-        # averages about 38 tokens for the cc_news data
         context_size: int = 32,
         # Same as embedding_dim:
         d_model: int = 256,
@@ -48,6 +46,7 @@ class slam_builder:
         epochs: int = 3,
         batch_size: int = 4,
         learning_rate: float = 5e-5,
+        stride: int = 4,
     ):
         """__init__
 
@@ -64,6 +63,7 @@ class slam_builder:
             epochs -- Number of training epochs (default: {1})
             batch_size -- Number of samples per training batch (default: {4})
             learning_rate --
+            stride -- overlap between examples (input/target pairs) from a given chunk
 
         """
         self.verbose = verbose
@@ -78,6 +78,7 @@ class slam_builder:
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.stride = stride
 
         # Set memory growth to avoid OOM issues
         gpus = tf.config.list_physical_devices("GPU")

@@ -32,8 +32,6 @@ usage: make-slam.py [-h] [-i INPUT_DIR] [-d] [-t TEXT_PERCENTAGE] [-n NAME]
 
 options:
   -h, --help            show this help message and exit
-  -i INPUT_DIR, --input_dir INPUT_DIR
-                        Specify a directory with text files
   -d, --download        Do a text download from Hugging Face
   -t TEXT_PERCENTAGE, --text_percentage TEXT_PERCENTAGE
                         Percentage of input text used to make dataset
@@ -49,14 +47,14 @@ options:
 
 ```
 
-The code uses *wikitext-2-v1* from Hugging Face as training text if *-d* is specified.
+The code uses *wikitext-2-v1* or *cs_news* from Hugging Face as training text, e.g. *-d cs_news*.
 
 ### Build a model
 
-Download and clean *wikitext-2-v1*, create a model, train the model with 1% of the cleaned *wikitext-2-v1* sentences for 3 epochs, be verbose, and use the given prompt:
+Download and clean training data from *cs_news*, create a model, train the model with 1% of the cleaned chunks for 3 epochs, be verbose, and try the given prompt:
 
 ```sh
-python3 sLAM/make-slam.py -d -p "This is a test" -t 1 -v --epochs 3
+python3 sLAM/make-slam.py -d cs_news -p "This is a test" -t 1 -v --epochs 3
 ```
 
 This creates a Keras model and a saved (serialized) tokenizer with the same name, and a histogram of sentence lengths. for example:
@@ -99,10 +97,12 @@ When the model is trained on ~1M tokens the generated text starts to look more s
 
 ## Operating Notes
 
-* Reducing the size of the input text with *-t* can eliminate OOM errors on the RTX 500.
+* Reducing the size of the input text with *-t* can eliminate OOM errors on the RTX 5000.
 * Reducing the size of the embedding with *--d_model* significantly reduces training time, e.g. from 20ms/step to 5ms/step
+* *context_size* should be related to chunk size, which averages about 38 tokens for the cc_news data
+* Reducing *context_size* reduces time per step but also reduces accuracy, so more training may be required
 
-### Installing Tensorflow using a container at TACC
+### Using Tensorflow from a container at TACC
 
 Run an interactive job using `srun` or `idev` to download a container made by NVIDIA.
 
@@ -112,8 +112,8 @@ module load tacc-apptainer
 apptainer pull docker://tensorflow/tensorflow:2.17.0-gpu
 ```
 
-Once the container is downloaded you can execute with `singularity`.
+Once the container is downloaded you can run it with `singularity`.
 
 ```sh
-singularity shell --nv ~/tensorflow_2.17.0-gpu.sif
+singularity shell --nv tensorflow_2.17.0-gpu.sif
 ```
