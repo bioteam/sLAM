@@ -26,25 +26,25 @@ Complete the installation:
 
 ```sh
 > python3 sLAM/make-slam.py -h
-usage: make-slam.py [-h] [-i INPUT_DIR] [-d] [-t TEXT_PERCENTAGE] [-n NAME]
-                    [--min_sentence_len MIN_SENTENCE_LEN] [--temperature TEMPERATURE] [--epochs EPOCHS] -p
-                    PROMPT [-v]
+usage: make-slam.py [-h] [-t TEXT_PERCENTAGE] [-m MIN_SENTENCE_LEN] [-n NAME] [--temperature TEMPERATURE] [--epochs EPOCHS] [--d_model D_MODEL] [-d DOWNLOAD] [--num_rows NUM_ROWS] -p PROMPT [-v]
 
 options:
   -h, --help            show this help message and exit
-  -d, --download        Do a text download from Hugging Face
   -t TEXT_PERCENTAGE, --text_percentage TEXT_PERCENTAGE
+                        Percentage of download used to make dataset
+  -m MIN_SENTENCE_LEN, --min_sentence_len MIN_SENTENCE_LEN
                         Percentage of input text used to make dataset
   -n NAME, --name NAME  Name used to save files, default is timestamp of completion
-  --min_sentence_len MIN_SENTENCE_LEN
-                        Mininum sentence length used in training
   --temperature TEMPERATURE
                         Temperature used for generation
   --epochs EPOCHS       Number of epochs
+  --d_model D_MODEL     Number of epochs
+  -d DOWNLOAD, --download DOWNLOAD
+                        Dataset to download
+  --num_rows NUM_ROWS   Number of rows to download from cc_news
   -p PROMPT, --prompt PROMPT
                         Prompt
   -v, --verbose         Verbose
-
 ```
 
 The code uses *wikitext-2-v1* or *cs_news* from Hugging Face as training text, e.g. *-d cs_news*.
@@ -52,9 +52,9 @@ The code uses *wikitext-2-v1* or *cs_news* from Hugging Face as training text, e
 ### Build a model
 
 Download and clean training data from *cs_news*, create a model, train the model with 1% of the cleaned chunks for 3 epochs, be verbose, and try the given prompt:
-  
+
 ```sh
-python3 sLAM/make-slam.py -d cs_news -p "This is a test" -t 1 -v --epochs 3
+python3 sLAM/make-slam.py -d cs_news --num_rows 500 -v --epochs 3 -p "This is a test"
 ```
 
 This creates a Keras model and a saved (serialized) tokenizer with the same name, and a histogram of sentence lengths. for example:
@@ -74,26 +74,6 @@ Supply the name of the model and the serialized tokenizer, and a prompt:
 ```sh
 python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
 ```
-
-Some results from a model trained for 3 epochs with ~100K tokens, generated at different temperatures:
-
-* This is a test the contract gave a revenue of up to 300 million in the course five years
-* This is a test the hurricane began to turn more northwestward in response to a high pressure system weakening to its north
-* this is a test right when reubens begins to snap danny out of hypnosis crush
-* this is a test it pond and the route wanted of what is today on july 21 humor and is according to burn for 21 although there
-
-Some of these examples suggest that the model is "memorizing" rather than generating novel text. It's likely that the training data set is too small, and/or that overfitting may be occuring.
-
-When the model is trained on ~1M tokens the generated text starts to look more syntactically correct, with less memorization:
-
-* This is a test however information shannon argued that it is not feasible for any computer to actually do this
-* This is a test the fourth attacked title was the first ship in the play s performance of the winner in the uk and was released as part of the season
-* This is a test a video posted to youtube called code of conduct outlined twenty two rules to follow when protesting and kakapo from a urged
-
-## To Do
-
-* Handle end-of-sentence (EOS) correctly.
-* Implement *mask_zero=True* in the embedding layer so that padding in the prompt is ignored during generation.
 
 ## Operating Notes
 
