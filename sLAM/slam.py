@@ -855,19 +855,28 @@ class slam_builder:
         if self.verbose:
             print(f"generate_text() - prompt_ids: {prompt_ids}")
 
-        # Truncate or pad if necessary
-        # self.context_size = model.inputs[0].shape[1]
+        # Modify this section to handle tensor shapes properly
         prompt_ids = prompt_ids[0]
-        if len(prompt_ids) > self.context_size:
-            prompt_ids = prompt_ids[-self.context_size :]
-        else:
-            prompt_ids = [0] * (
-                self.context_size - len(prompt_ids)
-            ) + prompt_ids
 
-        prompt_ids = np.array(prompt_ids)
+        # Convert to numpy array for easier manipulation
+        prompt_ids_np = (
+            prompt_ids.numpy()
+            if isinstance(prompt_ids, tf.Tensor)
+            else np.array(prompt_ids)
+        )
+
+        # Truncate or pad if necessary
+        if len(prompt_ids_np) > self.context_size:
+            prompt_ids_np = prompt_ids_np[-self.context_size :]
+        else:
+            # Create padding with the right shape
+            padding = np.zeros(
+                self.context_size - len(prompt_ids_np), dtype=np.int32
+            )
+            prompt_ids_np = np.concatenate([padding, prompt_ids_np])
+
         # Add batch dimension
-        prompt_ids = prompt_ids.reshape(1, -1)
+        prompt_ids = prompt_ids_np.reshape(1, -1)
 
         """Generate text token by token
             

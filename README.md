@@ -52,7 +52,7 @@ The code uses *wikitext-2-v1* or *cs_news* from Hugging Face as training text, e
 ### Build a model
 
 Download and clean training data from *cs_news*, create a model, train the model with 1% of the cleaned chunks for 3 epochs, be verbose, and try the given prompt:
-
+  
 ```sh
 python3 sLAM/make-slam.py -d cs_news -p "This is a test" -t 1 -v --epochs 3
 ```
