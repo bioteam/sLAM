@@ -358,7 +358,6 @@ class slam_builder:
             max_tokens=50000,
             output_mode="int",
             output_sequence_length=self.context_size,
-            #dtype=tf.int32,
         )
         """
         The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
@@ -495,12 +494,6 @@ class slam_builder:
     ):
         """prepare_datasets
 
-        1. Tokenizes the input texts into a flat array of integer token IDs
-        2. Creates examples by sliding a window of size context_size + 1 over the token sequence
-        3. Splits each example into input (all tokens except the last) and target (all tokens except the first)
-        4. Creates a TensorFlow dataset from these input/target pairs
-        5. Applies shuffling, batching, and prefetching for efficient training
-
         Arguments:
             texts -- list of strings
             train_size -- float, proportion of data to use for training (default: 0.8)
@@ -509,8 +502,12 @@ class slam_builder:
             train_dataset - tf.data.Dataset.from_tensor_slices
             val_dataset - tf.data.Dataset.from_tensor_slices
 
-        Converts text to sequences of integers (token
-        ids) that correspond to the indices in self.index_word.
+        1. Tokenizes the input texts into a flat array of integer token IDs
+        2. Creates examples by sliding a window of size context_size + 1 over the token sequence
+        3. Splits each example into input (all tokens except the last) and target (all tokens except the first)
+        4. Creates a TensorFlow dataset from these input/target pairs
+        5. Applies shuffling, batching, and prefetching for efficient training
+
         """
         if self.verbose:
             print(
