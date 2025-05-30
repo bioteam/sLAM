@@ -51,7 +51,7 @@ The code uses *wikitext-2-v1* or *cs_news* from Hugging Face as training text, e
 
 ### Build a model
 
-Download and clean training data from *cs_news*, create a model, train the model with 1% of the cleaned chunks for 3 epochs, be verbose, and try the given prompt:
+Download and clean training data from *cs_news*, create a model, train the model the cleaned chunks for 3 epochs, be verbose, and try the given prompt:
 
 ```sh
 python3 sLAM/make-slam.py -d cs_news --num_rows 500 -v --epochs 3 -p "This is a test"
@@ -65,14 +65,15 @@ This creates a Keras model and a saved (serialized) tokenizer with the same name
 -rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
 ```
 
-One epoch takes about 4.5 hours on a Mac M1 laptop (32 GB RAM).
+One epoch takes about 2 hours on a Mac M1 laptop (32 GB RAM) with the command above.
 
 ### Generate using an existing model
 
 Supply the name of the model and the serialized tokenizer, and a prompt:
 
 ```sh
-python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "this is a test"
+python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "This is a test"
+This is a test if your favorite software is the news service for the bottom of the increasing equipment market is actually plans for their concerns and the narrative of the same time i think it was the course of the technology is that the 5th us and i think what we are the most youre doing it we do to do that you want what to avoid the first amendment and other candidates are not just as the most
 ```
 
 ## Operating Notes
