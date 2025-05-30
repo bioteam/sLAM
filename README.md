@@ -57,7 +57,7 @@ Download and clean training data from *cs_news*, create a model, train the model
 python3 sLAM/make-slam.py -d cs_news --num_rows 500 -v --epochs 3 -p "This is a test"
 ```
 
-This creates a Keras model and a saved (serialized) tokenizer with the same name, and a histogram of sentence lengths. for example:
+This creates a Keras model (~1M tokens) and a saved (serialized) tokenizer with the same name, and a histogram of sentence lengths. for example:
 
 ```sh
 -rw-r--r--   332M Apr  1 05:09 04-01-2025-05-09-04.keras
@@ -83,18 +83,28 @@ This is a test if your favorite software is the news service for the bottom of t
 * *context_size* should be related to chunk size, which averages about 38 tokens for the cc_news data
 * Reducing *context_size* reduces time per step but also reduces accuracy, so more training may be required
 
+### Library and package versions
+
+One of the challenges in writing and running Deep Learning code is how many components there are, and how quickly new versions of these components appear. To get all your component versions aligned started with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or Pytorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
+
+RTX 5000 + CUDA 11.8 + Tensorflow 2.12 + Python 3.8
+
+Then the Python dependencies will follow from the Python version.
+
+*Getting these versions aligned is critical*, because if the versions are out of alignment you may get errors of various kinds that do not reference versions but are more generic and difficult to debug, like out-of-memory errors.
+
 ### Using Tensorflow from a container at TACC
 
-Run an interactive job using `srun` or `idev` to download a container made by NVIDIA.
+Containers may be available that package the right versions of CUDA with some framework. At TACC run an interactive job using `srun` or `idev` to download a container made by NVIDIA.
 
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
 module load tacc-apptainer
-apptainer pull docker://tensorflow/tensorflow:2.17.0-gpu
+apptainer pull docker://tensorflow/tensorflow:2.12.0-gpu
 ```
 
 Once the container is downloaded you can run it with `singularity`.
 
 ```sh
-singularity shell --nv tensorflow_2.17.0-gpu.sif
+singularity shell --nv tensorflow_2.12.0-gpu.sif
 ```

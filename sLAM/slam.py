@@ -10,7 +10,6 @@ import random
 import sys
 import time
 import pickle
-import nltk
 import re
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
