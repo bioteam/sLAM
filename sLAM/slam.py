@@ -359,7 +359,7 @@ class slam_builder:
             max_tokens=50000,
             output_mode="int",
             output_sequence_length=self.context_size,
-            dtype=tf.int32,
+            #dtype=tf.int32,
         )
         """
         The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
