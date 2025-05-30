@@ -65,7 +65,7 @@ This creates a Keras model and a saved (serialized) tokenizer with the same name
 -rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
 ```
 
-One epoch takes about 2 hours on a Mac M1 laptop (32 GB RAM) with the command above.
+One epoch takes about 1 hour on a Mac M1 laptop (32 GB RAM) with the command above.
 
 ### Generate using an existing model
 
