@@ -14,10 +14,10 @@ parser.add_argument(
 )
 parser.add_argument(
     "-m",
-    "--min_sentence_len",
-    default=50,
+    "--min_num_tokens",
+    default=20,
     type=int,
-    help="Percentage of input text used to make dataset",
+    help="Minimum number of tokens in sequence",
 )
 parser.add_argument(
     "-n",
@@ -57,16 +57,17 @@ args = parser.parse_args()
 
 
 builder = slam_builder(
-    verbose=args.verbose, name=args.name, epochs=args.epochs
+    verbose=args.verbose,
+    name=args.name,
+    epochs=args.epochs,
+    min_num_tokens=args.min_num_tokens,
 )
 if args.download == "wikitext-2-v1":
     wp_texts = load_dataset("wikitext", "wikitext-2-v1")
-    texts = builder.clean_wikitext(
-        wp_texts, args.text_percentage, args.min_sentence_len
-    )
+    texts = builder.clean_wikitext(wp_texts, args.text_percentage)
 elif args.download == "cc_news":
     cc_texts = load_dataset("cc_news", split=f"train[:{args.num_rows}]")
-    texts = builder.clean_cc_news(cc_texts, args.min_sentence_len)
+    texts = builder.clean_cc_news(cc_texts)
 else:
     sys.exit(f"Unknown download: {args.download}")
 
@@ -87,9 +88,6 @@ builder.save(model)
 
 if args.verbose:
     model.summary()
-    embedding_layer = model.get_layer("token_embeddings")
-    print(f"Vocabulary size: {embedding_layer.input_dim}")
-    print(f"Number of token ids: {len(builder.token_ids)}")
 
 result = builder.generate_text(
     args.prompt, model, temperature=args.temperature

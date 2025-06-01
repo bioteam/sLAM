@@ -65,7 +65,7 @@ This creates a Keras model (~1M tokens) and a saved (serialized) tokenizer with 
 -rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
 ```
 
-One epoch takes about 1 hour on a Mac M1 laptop (32 GB RAM) with the command above.
+One epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above.
 
 ### Generate using an existing model
 
@@ -78,7 +78,7 @@ This is a test if your favorite software is the news service for the bottom of t
 
 ## Operating Notes
 
-* Reducing the size of the input text with *-t* can eliminate OOM errors on the RTX 5000.
+* Reducing the size of the input text with *--num_rows* can eliminate OOM errors on the RTX 5000.
 * Reducing the size of the embedding with *--d_model* significantly reduces training time, e.g. from 20ms/step to 5ms/step
 * *context_size* should be related to chunk size, which averages about 38 tokens for the cc_news data
 * Reducing *context_size* reduces time per step but also reduces accuracy, so more training may be required

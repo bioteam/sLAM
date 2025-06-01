@@ -46,6 +46,7 @@ class slam_builder:
         batch_size: int = 4,
         learning_rate: float = 5e-5,
         stride: int = 4,
+        min_num_tokens: int = 0,
     ):
         """__init__
 
@@ -63,6 +64,7 @@ class slam_builder:
             batch_size -- Number of samples per training batch (default: {4})
             learning_rate --
             stride -- overlap between examples (input/target pairs) from a given chunk
+            min_num_tokens -- mininum number of tokens required in sequence
 
         """
         self.verbose = verbose
@@ -78,6 +80,8 @@ class slam_builder:
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.stride = stride
+        self.min_num_tokens = min_num_tokens
+        self.token_ids = list()
 
         # Set memory growth to avoid OOM issues
         gpus = tf.config.list_physical_devices("GPU")
@@ -360,8 +364,8 @@ class slam_builder:
             output_sequence_length=self.context_size,
         )
         """
-        The +1 tells the tokenizer to include the target token in the sequence. When training the model, 
-        you use the first context_size tokens as the input and the last context_size tokens as the target
+        When training the modelyou use the first context_size tokens as the input and the 
+        last context_size tokens as the target
         """
 
     def adapt(self, texts):
@@ -513,10 +517,16 @@ class slam_builder:
             print(
                 "prepare_datasets() - tokenize, prepare input and target token sequences, and create tf.data.Dataset.from_tensor_slices training and validation datasets"
             )
+        """Filter out arrays with excessive padding"""
+        for token_array in self.tokenizer(texts):
+            non_padding_count = np.sum(token_array != 0)
+            if non_padding_count > self.min_num_tokens:
+                self.token_ids.append
         """
         Create a flat array of token IDs representing all tokens from the input texts in order. 
+        An alternative would be to create examples from each individual chunk.
         """
-        self.token_ids = self.tokenizer(texts).numpy().flatten()
+        self.token_ids = self.token_ids.numpy().flatten()
 
         if self.verbose:
             print(
@@ -524,7 +534,9 @@ class slam_builder:
             )
         """Create examples with context_size + 1 (inputs and targets)"""
         examples = []
-        for i in range(0, len(self.token_ids) - self.context_size):
+        for i in range(
+            0, len(self.token_ids) - self.context_size, self.stride
+        ):
             examples.append(self.token_ids[i : i + self.context_size + 1])
         examples = np.array(examples)
 
@@ -925,32 +937,25 @@ class slam_builder:
 
         return prompt
 
-    def clean_cc_news(self, raw_texts, min_sentence_len):
+    def clean_cc_news(self, raw_texts):
         texts = list()
         for raw_text in raw_texts:
             subtxts = raw_text["text"].split("\n")
             for subtxt in subtxts:
                 alpha_count = sum(1 for char in subtxt if char.isalpha())
-                if (
-                    len(subtxt) > min_sentence_len
-                    and (alpha_count / len(subtxt)) > 0.7
-                ):
+                if (alpha_count / len(subtxt)) > 0.7:
                     texts.append(subtxt)
         if self.verbose:
             print(f"clean_cc_news() - number of text chunks: {len(texts)}")
         return texts
 
-    def clean_wikitext(self, raw_texts, percentage, min_sentence_len):
+    def clean_wikitext(self, raw_texts, percentage):
         sentences = list()
         texts = [t["text"].strip() for t in raw_texts["train"]]
         texts = [t for t in texts if not t.startswith("=")]
         for text in texts:
             for sentence in nltk.sent_tokenize(text):
-                if (
-                    "<unk>" not in sentence
-                    and "http" not in sentence
-                    and len(sentence) > min_sentence_len
-                ):
+                if "<unk>" not in sentence and "http" not in sentence:
                     # The nltk tokenizer introduces spaces
                     sentence = re.sub(r"\s+([.,?!:;'])", r"\1", sentence)
                     sentences.append(sentence)
