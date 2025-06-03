@@ -35,9 +35,9 @@ class slam_builder:
         verbose: bool = False,
         name: str = None,
         vocab_size: int = 50000,
-        context_size: int = 32,
+        context_size: int = 0,
         # Same as embedding_dim:
-        d_model: int = 256,
+        d_model: int = 0,
         n_layers: int = 4,
         n_heads: int = 4,
         d_ff: int = 1024,
@@ -45,27 +45,24 @@ class slam_builder:
         epochs: int = 3,
         batch_size: int = 4,
         learning_rate: float = 5e-5,
-        stride: int = 4,
-        min_num_tokens: int = 0,
+        temperature: float = 0,
     ):
         """__init__
 
         Keyword Arguments:
-            verbose -- Print out details (default: {False})
+            verbose -- Print out details (default: False)
             name -- Name identifier for the model (default: {None})
             vocab_size -- Size of the vocabulary/token dictionary (default: {50000})
-            context_size -- Maximum sequence length for input contexts (default: {256})
-            d_model -- Dimensionality of the model's embeddings (default: {256})
-            n_layers -- Number of transformer layers in the model (default: {4})
-            n_heads -- Number of attention heads in each transformer layer (default: {4})
-            d_ff -- Dimensionality of the feed-forward network (default: {1024})
-            dropout_rate -- Rate of dropout for regularization (default: {0.1})
-            epochs -- Number of training epochs (default: {1})
-            batch_size -- Number of samples per training batch (default: {4})
+            context_size -- Maximum sequence length for input contexts (default: 32)
+            d_model -- Dimensionality of the model's embeddings (default: 256)
+            n_layers -- Number of transformer layers in the model (default: 4)
+            n_heads -- Number of attention heads in each transformer layer (default: 4)
+            d_ff -- Dimensionality of the feed-forward network (default: 1024)
+            dropout_rate -- Rate of dropout for regularization (default: 0.1)
+            epochs -- Number of training epochs (default: 3)
+            batch_size -- Number of samples per training batch (default: 4)
             learning_rate --
-            stride -- overlap between examples (input/target pairs) from a given chunk
-            min_num_tokens -- mininum number of tokens required in sequence
-
+            temperature -- degree of randomness in generation (default: 0.7)
         """
         self.verbose = verbose
         self.name = name
@@ -79,8 +76,7 @@ class slam_builder:
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
-        self.stride = stride
-        self.min_num_tokens = min_num_tokens
+        self.temperature = temperature
         self.token_ids = list()
 
         # Set memory growth to avoid OOM issues
@@ -359,7 +355,7 @@ class slam_builder:
             )
 
         self.tokenizer = layers.TextVectorization(
-            max_tokens=50000,
+            max_tokens=self.vocab_size,
             output_mode="int",
             output_sequence_length=self.context_size,
         )
@@ -825,7 +821,6 @@ class slam_builder:
         prompt,
         model,
         max_length: int = 100,
-        temperature=None,
     ):
         """generate_text
 
@@ -837,7 +832,6 @@ class slam_builder:
 
         Keyword Arguments:
             max_length: Maximum length of generated sequence
-            temperature: Controls randomness in generation
 
         Returns:
             Generated text as a string
@@ -913,7 +907,7 @@ class slam_builder:
             predictions = model.predict(prompt_ids, verbose=0)[0][-1]
 
             # Apply temperature scaling
-            scaled_predictions = predictions / temperature
+            scaled_predictions = predictions / self.temperature
 
             # Sample next token
             predicted_id = tf.random.categorical(

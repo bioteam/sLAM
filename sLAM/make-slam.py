@@ -13,11 +13,10 @@ parser.add_argument(
     help="Percentage of download used to make dataset",
 )
 parser.add_argument(
-    "-m",
-    "--min_num_tokens",
-    default=20,
+    "--context_size",
+    default=32,
     type=int,
-    help="Minimum number of tokens in sequence",
+    help="Context size",
 )
 parser.add_argument(
     "-n",
@@ -60,7 +59,9 @@ builder = slam_builder(
     verbose=args.verbose,
     name=args.name,
     epochs=args.epochs,
-    min_num_tokens=args.min_num_tokens,
+    context_size=args.context_size,
+    d_model=args.d_model,
+    temperature=args.temperature,
 )
 if args.download == "wikitext-2-v1":
     wp_texts = load_dataset("wikitext", "wikitext-2-v1")
