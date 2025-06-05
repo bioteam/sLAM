@@ -90,7 +90,5 @@ builder.save(model)
 if args.verbose:
     model.summary()
 
-result = builder.generate_text(
-    args.prompt, model, temperature=args.temperature
-)
+result = builder.generate_text(args.prompt, model)
 print(f"Result: {result}")

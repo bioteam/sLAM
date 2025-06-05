@@ -46,6 +46,7 @@ class slam_builder:
         batch_size: int = 4,
         learning_rate: float = 5e-5,
         temperature: float = 0,
+        stride: int = 4,
     ):
         """__init__
 
@@ -77,6 +78,7 @@ class slam_builder:
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.temperature = temperature
+        self.stride = stride
         self.token_ids = list()
 
         # Set memory growth to avoid OOM issues
@@ -96,6 +98,16 @@ class slam_builder:
         Returns:
             x -- Transformed tensor with the same shape as the input but processed through
                  self-attention and feed-forward layers
+
+        Purpose of the transformer_block method:
+
+        1. Layer Initialization: When transformer blocks are created, the layers (attention, feed-forward
+        networks, normalization layers) are initialized with random weights following some initialization
+        strategy (likely Xavier/Glorot or He initialization).
+        2. Parameter Setup: The transformer_block method would set up the multi-head attention mechanisms,
+        feed-forward networks, and layer normalization components.
+        3. Architecture Construction: The layers are stacked together to form the complete transformer
+        architecture.
 
         Multi-Head Attention
 
@@ -516,13 +528,13 @@ class slam_builder:
         """Filter out arrays with excessive padding"""
         for token_array in self.tokenizer(texts):
             non_padding_count = np.sum(token_array != 0)
-            if non_padding_count > self.min_num_tokens:
-                self.token_ids.append
+            if non_padding_count > 4:
+                self.token_ids.append(token_array)
         """
         Create a flat array of token IDs representing all tokens from the input texts in order. 
         An alternative would be to create examples from each individual chunk.
         """
-        self.token_ids = self.token_ids.numpy().flatten()
+        self.token_ids = np.array(self.token_ids).flatten()
 
         if self.verbose:
             print(
