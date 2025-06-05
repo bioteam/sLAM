@@ -24,11 +24,9 @@ parser.add_argument(
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
 
-generator = slam_builder(verbose=args.verbose)
+generator = slam_builder(verbose=args.verbose, temperature=args.temperature)
 
 model = generator.load(args.name)
 
-result = generator.generate_text(
-    args.prompt, model, temperature=args.temperature
-)
+result = generator.generate_text(args.prompt, model)
 print(result)

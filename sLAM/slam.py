@@ -865,32 +865,12 @@ class slam_builder:
         token like <unk>, [UNK], or <unknown> depending on the tokenizer.
         """
 
-        prompt_ids = self.tokenizer(tf.convert_to_tensor([prompt]))
+        prompt_ids = self.tokenizer(tf.convert_to_tensor([prompt]))[0]
         if self.verbose:
             print(f"generate_text() - prompt_ids: {prompt_ids}")
 
-        # Modify this section to handle tensor shapes properly
-        prompt_ids = prompt_ids[0]
-
-        # Convert to numpy array for easier manipulation
-        prompt_ids_np = (
-            prompt_ids.numpy()
-            if isinstance(prompt_ids, tf.Tensor)
-            else np.array(prompt_ids)
-        )
-
-        # Truncate or pad if necessary
-        if len(prompt_ids_np) > self.context_size:
-            prompt_ids_np = prompt_ids_np[-self.context_size :]
-        else:
-            # Create padding with the right shape
-            padding = np.zeros(
-                self.context_size - len(prompt_ids_np), dtype=np.int32
-            )
-            prompt_ids_np = np.concatenate([padding, prompt_ids_np])
-
-        # Add batch dimension
-        prompt_ids = prompt_ids_np.reshape(1, -1)
+        # Reshape and add a batch dimension
+        prompt_ids = prompt_ids.numpy().reshape(1, -1)
 
         """Generate text token by token
             
@@ -933,11 +913,11 @@ class slam_builder:
             # Convert token to word and append to result
             word = self.id_to_word(predicted_id)
             if word:
-                prompt += " " + word
-
                 # Stop if we generate an end token
                 if word == "<EOS>":
+                    prompt += "."
                     break
+                prompt += " " + word
             elif self.verbose:
                 print(f"generate_text() - no token for id {predicted_id}")
 
