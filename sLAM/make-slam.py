@@ -50,6 +50,11 @@ parser.add_argument(
     help="Number of rows to download from cc_news",
     default=5000,
 )
+parser.add_argument(
+    "--use_mlflow",
+    help="Use MLFlow",
+    action="store_true",
+)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
@@ -62,6 +67,7 @@ builder = slam_builder(
     context_size=args.context_size,
     d_model=args.d_model,
     temperature=args.temperature,
+    use_mlflow=args.use_mlflow,
 )
 if args.download == "wikitext-2-v1":
     wp_texts = load_dataset("wikitext", "wikitext-2-v1")

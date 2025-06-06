@@ -22,6 +22,7 @@ datasets = '*'
 nltk = '*'
 matplotlib = '*'
 scikit-learn = '*'
+mlflow = '*'
 
 [build-system]
 requires = ["poetry-core"]

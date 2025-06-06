@@ -11,6 +11,8 @@ import sys
 import time
 import pickle
 import re
+import mlflow
+from mlflow.tensorflow import autolog  # Import autolog from mlflow.tensorflow
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -47,6 +49,7 @@ class slam_builder:
         learning_rate: float = 5e-5,
         temperature: float = 0,
         stride: int = 4,
+        use_mlflow: bool = False,
     ):
         """__init__
 
@@ -64,6 +67,7 @@ class slam_builder:
             batch_size -- Number of samples per training batch (default: 4)
             learning_rate --
             temperature -- degree of randomness in generation (default: 0.7)
+            use_mflow -- use MLFlow (default: False)
         """
         self.verbose = verbose
         self.name = name
@@ -79,6 +83,7 @@ class slam_builder:
         self.learning_rate = learning_rate
         self.temperature = temperature
         self.stride = stride
+        self.use_mlflow = use_mlflow
         self.token_ids = list()
 
         # Set memory growth to avoid OOM issues
@@ -773,24 +778,57 @@ class slam_builder:
 
         # Train model
         validation_callback = ValidationPrintCallback(val_dataset)
-        self.history = model.fit(
-            train_dataset,
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            callbacks=[
-                checkpoint_callback,
-                early_stopping,
-                validation_callback,
-            ],
-            validation_data=val_dataset,
-            verbose=1,
-        )
+
+        if self.use_mlflow:
+            # Start MLflow run
+            run_name = "One"
+            # run_id = 1
+            nested = True
+            description = "sLAM"
+            mlflow.set_tracking_uri(uri="http://127.0.0.1:9999")
+            autolog()
+            if self.verbose:
+                print("MLFlow URL is http://127.0.0.1:9999")
+            with mlflow.start_run(
+                run_name=run_name,
+                nested=nested,
+                description=description,
+                log_system_metrics=["CPU", "GPU"],
+            ):
+                self.history = model.fit(
+                    train_dataset,
+                    epochs=self.epochs,
+                    batch_size=self.batch_size,
+                    callbacks=[
+                        checkpoint_callback,
+                        early_stopping,
+                        validation_callback,
+                        mlflow.tensorflow.MlflowCallback(),
+                    ],
+                    validation_data=val_dataset,
+                    verbose=1,
+                )
+        else:
+            self.history = model.fit(
+                train_dataset,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                callbacks=[
+                    checkpoint_callback,
+                    early_stopping,
+                    validation_callback,
+                ],
+                validation_data=val_dataset,
+                verbose=1,
+            )
+
         val_loss = self.history.history["val_loss"]
         if self.verbose:
             print(f"val_loss: {val_loss[-1]}")
         val_accuracy = self.history.history["val_accuracy"]
         if self.verbose:
             print(f"val_accuracy: {val_accuracy[-1]}")
+
         return model
 
     def save(self, model):
@@ -985,3 +1023,14 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
         print(f"\nValidation results {epoch}:")
         for name, value in zip(metric_names, val_results):
             print(f"val_{name}: {value:.4f}")
+
+
+class MLflowCallback(tf.keras.callbacks.Callback):
+    def __init__(self, run):
+        super().__init__()
+        self.run = run
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        for metric_name, metric_value in logs.items():
+            mlflow.log_metric(metric_name, metric_value, step=epoch)
