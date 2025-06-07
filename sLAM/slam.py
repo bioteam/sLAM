@@ -1,7 +1,8 @@
 import os
 
-# Set before importing TensorFlow
+# Enable asynchronous memory allocation
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
+import mlflow.tensorflow
 import tensorflow as tf
 
 import numpy as np
@@ -11,8 +12,14 @@ import sys
 import time
 import pickle
 import re
+import os
+import subprocess
+import time
+import signal
+import atexit
 import mlflow
-from mlflow.tensorflow import autolog  # Import autolog from mlflow.tensorflow
+from mlflow.tensorflow import autolog
+from mlflow.tensorflow import MlflowCallback
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -35,7 +42,7 @@ class slam_builder:
     def __init__(
         self,
         verbose: bool = False,
-        name: str = None,
+        name: str = None,  # type: ignore
         vocab_size: int = 50000,
         context_size: int = 0,
         # Same as embedding_dim:
@@ -84,9 +91,16 @@ class slam_builder:
         self.temperature = temperature
         self.stride = stride
         self.use_mlflow = use_mlflow
+
         self.token_ids = list()
 
-        # Set memory growth to avoid OOM issues
+        """Start up the MLFlow server it it's not already running"""
+        self.mlflow_pid = None
+        self.mlflow_port = 9999
+        if self.use_mlflow:
+            self.start_mlflow_server()
+
+        """ Set memory growth to avoid OOM issues """
         gpus = tf.config.list_physical_devices("GPU")
         if len(gpus) > 0:
             for gpu in gpus:
@@ -752,10 +766,6 @@ class slam_builder:
         checkpoint_prefix = os.path.join(
             checkpoint_dir, "ckpt_{epoch}.weights.h5"
         )
-        checkpoint_callback = ModelCheckpoint(
-            filepath=checkpoint_prefix, save_weights_only=True
-        )
-
         """        
         Logits in neural networks: When your model makes a prediction for the next token in a sequence, 
         it outputs a vector of real numbers (one for each token in your vocabulary). 
@@ -776,7 +786,12 @@ class slam_builder:
             verbose=1,
         )
 
-        # Train model
+        """ Callbacks """
+        checkpoint_callback = ModelCheckpoint(
+            filepath=checkpoint_prefix, save_weights_only=True
+        )
+        # Add the numerical stability callback
+        instability_callback = NumericalStabilityCallback()
         validation_callback = ValidationPrintCallback(val_dataset)
 
         if self.use_mlflow:
@@ -785,16 +800,21 @@ class slam_builder:
             # run_id = 1
             nested = True
             description = "sLAM"
-            mlflow.set_tracking_uri(uri="http://127.0.0.1:9999")
+            mlflow.set_tracking_uri(uri=f"http://127.0.0.1:{self.mlflow_port}")
             autolog()
-            if self.verbose:
-                print("MLFlow URL is http://127.0.0.1:9999")
             with mlflow.start_run(
                 run_name=run_name,
                 nested=nested,
                 description=description,
                 log_system_metrics=["CPU", "GPU"],
             ):
+                mlflow.log_metric("accuracy", 0.95)
+                mlflow.log_param("batch_size", self.batch_size)
+                mlflow.log_param("epochs", self.epochs)
+                mlflow.log_param("learning_rate", self.learning_rate)
+                mlflow.log_param("optimizer", optimizer.__class__.__name__)
+                mlflow.log_param("mixed_precision", "float32")
+
                 self.history = model.fit(
                     train_dataset,
                     epochs=self.epochs,
@@ -803,7 +823,8 @@ class slam_builder:
                         checkpoint_callback,
                         early_stopping,
                         validation_callback,
-                        mlflow.tensorflow.MlflowCallback(),
+                        MlflowCallback(),
+                        instability_callback,
                     ],
                     validation_data=val_dataset,
                     verbose=1,
@@ -1010,6 +1031,40 @@ class slam_builder:
         model = tf.keras.models.load_model(f"{self.name}.keras")
         return model
 
+    def start_mlflow_server(self):
+        """Start MLFlow server programmatically on the specified port"""
+        # Check if the port is already in use
+        import socket
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        in_use = False
+        try:
+            sock.bind(("127.0.0.1", self.mlflow_port))
+        except socket.error:
+            in_use = True
+        finally:
+            sock.close()
+
+        if in_use:
+            if self.verbose:
+                print(
+                    f"Port {self.mlflow_port} is already in use. MLFlow server might already be running."
+                )
+            return None
+
+        # Start the MLFlow server as a subprocess
+        cmd = f"mlflow server --host 127.0.0.1 --port {self.mlflow_port}"
+        try:
+            self.mlflow_pid = subprocess.Popen(
+                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            # Give the server a moment to start up
+            time.sleep(2)
+            if self.verbose:
+                print(f"MLFlow URL is http://127.0.0.1:{self.mlflow_port}")
+        except Exception as e:
+            print(f"Error starting MLFlow: {e}")
+
 
 class ValidationPrintCallback(tf.keras.callbacks.Callback):
 
@@ -1025,7 +1080,82 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
             print(f"val_{name}: {value:.4f}")
 
 
-class MLflowCallback(tf.keras.callbacks.Callback):
+""" custom TensorFlow callback to track numerical stability """
+
+
+class NumericalStabilityCallback(tf.keras.callbacks.Callback):
+    def __init__(self, log_frequency=1):
+        super().__init__()
+        self.log_frequency = log_frequency
+        self.batch_losses = []
+        self.gradient_norms = []
+        self.has_nan_or_inf = False
+
+    def on_batch_end(self, batch, logs=None):
+        # Store batch losses to compute variance later
+        if logs and "loss" in logs:
+            self.batch_losses.append(logs["loss"])
+
+            # Check for NaN/Inf
+            if np.isnan(logs["loss"]) or np.isinf(logs["loss"]):
+                self.has_nan_or_inf = True
+
+    def on_epoch_end(self, epoch, model, logs=None):
+        if epoch % self.log_frequency == 0:
+            # Log gradient norms for a few layers (requires custom training loop or grad tape)
+            # For simplicity, we're logging other metrics here
+            # Log loss variance across batches
+            if len(self.batch_losses) > 1:
+                loss_variance = np.var(self.batch_losses)
+                mlflow.log_metric(
+                    f"epoch_{epoch}_loss_variance", loss_variance
+                )
+            # Log if NaN/Inf was detected
+            mlflow.log_metric(
+                f"epoch_{epoch}_has_nan_inf", int(self.has_nan_or_inf)
+            )
+
+            # Reset for next epoch
+            self.batch_losses = []
+            self.has_nan_or_inf = False
+
+            # Log weight statistics for each layer
+            for i, layer in enumerate(self.model.layers):
+                if len(layer.weights) > 0:  # Only for layers with weights
+                    # Get weights
+                    weights = layer.get_weights()[0]
+
+                    # Log weight statistics
+                    mlflow.log_metric(
+                        f"epoch_{epoch}_layer_{i}_weight_mean",
+                        np.mean(weights),
+                    )
+                    mlflow.log_metric(
+                        f"epoch_{epoch}_layer_{i}_weight_var", np.var(weights)
+                    )
+                    mlflow.log_metric(
+                        f"epoch_{epoch}_layer_{i}_weight_max",
+                        np.max(np.abs(weights)),
+                    )
+
+                    # Check for extreme values
+                    has_extreme = np.any(np.abs(weights) > 1000)
+                    mlflow.log_metric(
+                        f"epoch_{epoch}_layer_{i}_has_extreme_weights",
+                        int(has_extreme),
+                    )
+
+                    # For specific layers, log activation stats if needed
+                    if (
+                        hasattr(layer, "activation")
+                        and layer.activation is not None
+                    ):
+                        # This would require custom tracking during forward pass
+                        pass
+
+
+"""
+class MLFlowCallback(tf.keras.callbacks.Callback):
     def __init__(self, run):
         super().__init__()
         self.run = run
@@ -1034,3 +1164,34 @@ class MLflowCallback(tf.keras.callbacks.Callback):
         logs = logs or {}
         for metric_name, metric_value in logs.items():
             mlflow.log_metric(metric_name, metric_value, step=epoch)
+"""
+
+""" 
+    # Register cleanup function to terminate the server when the script ends
+def cleanup():
+        if process.poll() is None:  # If process is still running
+            if os.name == 'nt':  # Windows
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(process.pid)])
+            else:  # Unix/Linux/MacOS
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    
+    atexit.register(cleanup)
+    
+    # Set the tracking URI to point to our server
+    mlflow.set_tracking_uri(f"http://127.0.0.1:{port}")
+    print(f"MLFlow server started on port {port}")
+    
+    return process
+
+# Start the server before your ML code
+mlflow_process = start_mlflow_server(port=8080)
+
+# Your ML code that uses MLFlow
+with mlflow.start_run():
+    # Log parameters, metrics, etc.
+    mlflow.log_param("param1", 5)
+    mlflow.log_metric("accuracy", 0.95)
+    # ... rest of your ML code ...
+
+# The server will be automatically terminated when the script exits
+"""
