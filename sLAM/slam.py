@@ -92,6 +92,9 @@ class slam_builder:
         self.stride = stride
         self.use_mlflow = use_mlflow
 
+        if not self.name:
+            self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
+
         self.token_ids = list()
 
         """Start up the MLFlow server it it's not already running"""
@@ -795,13 +798,17 @@ class slam_builder:
         validation_callback = ValidationPrintCallback(val_dataset)
 
         if self.use_mlflow:
-            # Start MLflow run
-            run_name = "One"
+            run_name = self.name
             # run_id = 1
             nested = True
             description = "sLAM"
             mlflow.set_tracking_uri(uri=f"http://127.0.0.1:{self.mlflow_port}")
-            autolog()
+            autolog(
+                log_models=True,
+                log_input_examples=False,
+                log_model_signatures=True,
+                log_datasets=False,
+            )
             with mlflow.start_run(
                 run_name=run_name,
                 nested=nested,
@@ -861,10 +868,9 @@ class slam_builder:
             model -- trained model
 
         Returns: none
+
+        In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately.
         """
-        if not self.name:
-            self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
-        """In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately"""
         model.save(f"{self.name}.keras")
         if self.verbose:
             print(f"save() - saved Keras model: ({self.name}.keras)")
@@ -1183,15 +1189,4 @@ def cleanup():
     
     return process
 
-# Start the server before your ML code
-mlflow_process = start_mlflow_server(port=8080)
-
-# Your ML code that uses MLFlow
-with mlflow.start_run():
-    # Log parameters, metrics, etc.
-    mlflow.log_param("param1", 5)
-    mlflow.log_metric("accuracy", 0.95)
-    # ... rest of your ML code ...
-
-# The server will be automatically terminated when the script exits
 """
