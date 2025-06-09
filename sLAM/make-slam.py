@@ -68,6 +68,8 @@ builder = slam_builder(
     d_model=args.d_model,
     temperature=args.temperature,
     use_mlflow=args.use_mlflow,
+    download=args.download,
+    num_rows=args.num_rows,
 )
 if args.download == "wikitext-2-v1":
     wp_texts = load_dataset("wikitext", "wikitext-2-v1")

@@ -57,6 +57,8 @@ class slam_builder:
         temperature: float = 0,
         stride: int = 4,
         use_mlflow: bool = False,
+        download: str = None,  # type: Ignore
+        num_rows: int = 0,
     ):
         """__init__
 
@@ -91,6 +93,8 @@ class slam_builder:
         self.temperature = temperature
         self.stride = stride
         self.use_mlflow = use_mlflow
+        self.num_rows = num_rows
+        self.download = download
 
         if not self.name:
             self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
@@ -782,80 +786,83 @@ class slam_builder:
             loss=SparseCategoricalCrossentropy(from_logits=True),
             metrics=["accuracy"],
         )
+
+        """ Callbacks """
         early_stopping = EarlyStopping(
             monitor="val_loss",
             patience=3,
             restore_best_weights=True,
             verbose=1,
         )
-
-        """ Callbacks """
         checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_prefix, save_weights_only=True
         )
-        # Add the numerical stability callback
         instability_callback = NumericalStabilityCallback()
         validation_callback = ValidationPrintCallback(val_dataset)
+        metrics_callback = MLFlowMetricsCallback()
+
+        callbacks = [
+            early_stopping,
+            checkpoint_callback,
+            instability_callback,
+            validation_callback,
+        ]
+
+        fit_params = {
+            "validation_data": val_dataset,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "verbose": 1,
+        }
 
         if self.use_mlflow:
-            run_name = self.name
-            # run_id = 1
-            nested = True
-            description = "sLAM"
             mlflow.set_tracking_uri(uri=f"http://127.0.0.1:{self.mlflow_port}")
             autolog(
                 log_models=True,
-                log_input_examples=False,
+                log_input_examples=True,
                 log_model_signatures=True,
-                log_datasets=False,
+                log_datasets=True,
+                silent=False,
             )
+            callbacks.append(MlflowCallback())
+            callbacks.append(metrics_callback)
+
             with mlflow.start_run(
-                run_name=run_name,
-                nested=nested,
-                description=description,
+                run_name=self.name,
+                nested=True,
+                description="sLAM",
                 log_system_metrics=["CPU", "GPU"],
             ):
-                mlflow.log_metric("accuracy", 0.95)
                 mlflow.log_param("batch_size", self.batch_size)
                 mlflow.log_param("epochs", self.epochs)
                 mlflow.log_param("learning_rate", self.learning_rate)
                 mlflow.log_param("optimizer", optimizer.__class__.__name__)
                 mlflow.log_param("mixed_precision", "float32")
+                mlflow.log_param("dataset_name", self.download)
+                mlflow.log_param("dataset_size", self.num_rows)
 
                 self.history = model.fit(
-                    train_dataset,
-                    epochs=self.epochs,
-                    batch_size=self.batch_size,
-                    callbacks=[
-                        checkpoint_callback,
-                        early_stopping,
-                        validation_callback,
-                        MlflowCallback(),
-                        instability_callback,
-                    ],
-                    validation_data=val_dataset,
-                    verbose=1,
+                    train_dataset, callbacks=callbacks, **fit_params
                 )
         else:
             self.history = model.fit(
-                train_dataset,
-                epochs=self.epochs,
-                batch_size=self.batch_size,
-                callbacks=[
-                    checkpoint_callback,
-                    early_stopping,
-                    validation_callback,
-                ],
-                validation_data=val_dataset,
-                verbose=1,
+                train_dataset, callbacks=callbacks, **fit_params
             )
 
         val_loss = self.history.history["val_loss"]
-        if self.verbose:
-            print(f"val_loss: {val_loss[-1]}")
         val_accuracy = self.history.history["val_accuracy"]
         if self.verbose:
+            print(f"val_loss: {val_loss[-1]}")
             print(f"val_accuracy: {val_accuracy[-1]}")
+
+        if self.use_mlflow and val_loss:
+            mlflow.log_metric("loss", val_loss[-1])
+            mlflow.log_metric("accuracy", val_accuracy[-1])
+            # You can also log training metrics
+            train_loss = self.history.history["loss"]
+            train_accuracy = self.history.history["accuracy"]
+            mlflow.log_metric("train_loss", train_loss[-1])
+            mlflow.log_metric("train_accuracy", train_accuracy[-1])
 
         return model
 
@@ -873,11 +880,11 @@ class slam_builder:
         """
         model.save(f"{self.name}.keras")
         if self.verbose:
-            print(f"save() - saved Keras model: ({self.name}.keras)")
+            print(f"save() - saved Keras model: {self.name}.keras")
         with open(f"{self.name}.pickle", "wb") as p:
             pickle.dump(self.tokenizer, p, protocol=pickle.HIGHEST_PROTOCOL)
         if self.verbose:
-            print(f"save() - saved tokenizer: ({self.name}.pickle)")
+            print(f"save() - saved tokenizer: {self.name}.pickle")
 
     def id_to_word(self, token_id):
         """id_to_word
@@ -1084,6 +1091,20 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
         print(f"\nValidation results {epoch}:")
         for name, value in zip(metric_names, val_results):
             print(f"val_{name}: {value:.4f}")
+
+
+# Create a custom callback to log metrics at each epoch
+class MLFlowMetricsCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        for metric_name, metric_value in logs.items():
+            mlflow.log_metric(metric_name, metric_value, step=epoch)
+
+            # Log custom metrics
+            if "val_loss" in logs and "val_accuracy" in logs:
+                # Calculate perplexity (a common LM metric)
+                perplexity = np.exp(logs["val_loss"])
+                mlflow.log_metric("perplexity", perplexity, step=epoch)
 
 
 """ custom TensorFlow callback to track numerical stability """
