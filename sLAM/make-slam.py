@@ -100,3 +100,5 @@ if args.verbose:
 
 result = builder.generate_text(args.prompt, model)
 print(f"Result: {result}")
+
+builder.cleanup()
