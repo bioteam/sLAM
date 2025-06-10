@@ -995,6 +995,27 @@ class slam_builder:
         return prompt
 
     def clean_cc_news(self, raw_texts):
+        """clean_cc_news
+        Clean and filter CC-News text data by extracting high-quality text chunks.
+
+        This method processes raw CC-News data by splitting texts on newlines and
+        filtering out chunks that don't meet a minimum alphabetic character threshold.
+        Only text chunks with more than 70% alphabetic characters are retained.
+
+        Args:
+            raw_texts (list): List of dictionaries containing raw text data, where each
+                dictionary has a "text" key with the content to be processed.
+
+        Returns:
+            list: A list of cleaned text strings that passed the alphabetic character
+                threshold filter.
+
+        Example:
+            >>> raw_texts = [{"text": "Hello world\n123456\nThis is good text"}]
+            >>> cleaned = self.clean_cc_news(raw_texts)
+            >>> # Returns: ["Hello world", "This is good text"]
+            >>> # "123456" is filtered out due to low alphabetic character ratio
+        """
         texts = list()
         for raw_text in raw_texts:
             subtxts = raw_text["text"].split("\n")
@@ -1007,6 +1028,38 @@ class slam_builder:
         return texts
 
     def clean_wikitext(self, raw_texts, percentage):
+        """clean_wikitext
+
+        Clean and preprocess WikiText dataset sentences.
+
+        This method processes raw WikiText data by filtering out headers, removing
+        sentences with unknown tokens and URLs, fixing tokenization artifacts, and
+        optionally sampling a percentage of the cleaned sentences.
+
+        Args:
+            raw_texts: A dataset dictionary containing a "train" split with text entries.
+                    Each entry should have a "text" field containing the raw text.
+            percentage: Float or int between 0-100 indicating what percentage of cleaned
+                    sentences to retain. If 100, all cleaned sentences are kept.
+
+        Returns:
+            List[str]: A list of cleaned sentences ready for use in training/evaluation.
+                    Sentences have been filtered, cleaned, and potentially sampled.
+
+        Example:
+            >>> slam = SLAM()
+            >>> raw_data = {"train": [{"text": "This is a sentence."}, {"text": "= Header ="}]}
+            >>> cleaned = slam.clean_wikitext(raw_data, 50)  # Keep 50% of sentences
+            >>> # Returns: ['This is a sentence.'] (header filtered out)
+
+        Note:
+            The cleaning process:
+            1. Removes lines starting with "=" (WikiText headers)
+            2. Splits text into sentences using NLTK
+            3. Filters out sentences containing "<unk>" tokens or "http" URLs
+            4. Fixes NLTK tokenization spacing issues around punctuation
+            5. Randomly samples sentences if percentage < 100
+        """
         sentences = list()
         texts = [t["text"].strip() for t in raw_texts["train"]]
         texts = [t for t in texts if not t.startswith("=")]
@@ -1031,6 +1084,25 @@ class slam_builder:
         return sentences
 
     def load(self, name):
+        """load
+        Load a previously saved tokenizer and model from disk.
+
+        Loads the tokenizer from a pickle file and the Keras model from a .keras file,
+        then recreates the token index for the loaded tokenizer.
+
+        Args:
+            name (str): The base name for the saved files (without extensions).
+                       Will look for {name}.pickle and {name}.keras files.
+
+        Returns:
+            tf.keras.Model: The loaded Keras model.
+
+        Raises:
+            SystemExit: If either the tokenizer pickle file or model file is not found.
+
+        Example:
+            model = slam_instance.load("my_saved_model")
+        """
         self.name = name
         if not os.path.exists(f"{self.name}.pickle"):
             sys.exit(f"Tokenizer pickle file not found: {self.name}.pickle")
@@ -1044,7 +1116,22 @@ class slam_builder:
         return model
 
     def start_mlflow_server(self):
-        """Start MLFlow server programmatically on the specified port"""
+        """start_mlflow_server
+
+        Start MLFlow server programmatically on the specified port.
+
+        This method attempts to start an MLFlow tracking server on the port specified
+        by self.mlflow_port. It first checks if the port is already in use to avoid
+        conflicts with existing MLFlow instances.
+
+        Returns:
+            None: If the port is already in use or after attempting to start the server.
+
+        Notes:
+            - Uses socket binding to check port availability before starting
+            - If port is in use, assumes MLFlow server is already running
+            - Prints status message if verbose mode is enabled
+        """
         # Check if the port is already in use
         import socket
 
@@ -1067,7 +1154,7 @@ class slam_builder:
         # Start the MLFlow server as a subprocess
         cmd = f"mlflow server --host 127.0.0.1 --port {self.mlflow_port}"
         try:
-            self.mlflow_pid = subprocess.Popen(
+            self.mlflow_process = subprocess.Popen(
                 cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
             # Give the server a moment to start up
@@ -1077,14 +1164,54 @@ class slam_builder:
         except Exception as e:
             print(f"Error starting MLFlow: {e}")
 
+    @atexit.register
+    def cleanup(self):
+        if self.mlflow_process.poll() is None:  # If process is still running
+            if os.name == "nt":  # Windows
+                subprocess.call(
+                    [
+                        "taskkill",
+                        "/F",
+                        "/T",
+                        "/PID",
+                        str(self.mlflow_process.pid),
+                    ]
+                )
+            else:  # Unix/Linux/MacOS
+                os.killpg(os.getpgid(self.mlflow_process.pid), signal.SIGTERM)
+
 
 class ValidationPrintCallback(tf.keras.callbacks.Callback):
+    """ValidationPrintCallback
+
+    A custom Keras callback that prints validation metrics at the end of each epoch.
+
+    This callback evaluates the model on validation data and prints the results
+    in a formatted manner, making it easier to track validation performance
+    during training.
+
+    Attributes:
+        validation_data: The validation dataset to evaluate the model on.
+
+    Args:
+        validation_data: A tf.data.Dataset or tuple of (inputs, targets)
+                        containing the validation data.
+    """
 
     def __init__(self, validation_data):
         super().__init__()
         self.validation_data = validation_data
 
     def on_epoch_end(self, epoch, logs=None):
+        """on_epoch_end
+
+        Called at the end of each epoch to evaluate and print validation metrics.
+
+        Args:
+            epoch (int): The current epoch number.
+            logs (dict, optional): Dictionary of logs from the training epoch.
+                                  Not used in this implementation.
+        """
         val_results = self.model.evaluate(self.validation_data, verbose=0)
         metric_names = self.model.metrics_names
         print(f"\nValidation results {epoch}:")
@@ -1092,9 +1219,42 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
             print(f"val_{name}: {value:.4f}")
 
 
-# Create a custom callback to log metrics at each epoch
 class MLFlowMetricsCallback(tf.keras.callbacks.Callback):
+    """MLFlowMetricsCallback
+
+    A custom Keras callback for logging training metrics to MLflow during model training.
+
+    This callback automatically logs all metrics from the training logs to MLflow at the
+    end of each epoch. Additionally, it calculates and logs perplexity when validation
+    loss and accuracy are available.
+
+    Attributes:
+        Inherits all attributes from tf.keras.callbacks.Callback
+
+    Example:
+        >>> callback = MLFlowMetricsCallback()
+        >>> model.fit(x_train, y_train, callbacks=[callback])
+    """
+
     def on_epoch_end(self, epoch, logs=None):
+        """
+        on_epoch_end
+
+        Called at the end of each training epoch to log metrics to MLflow.
+
+        Logs all available metrics from the epoch's training logs to MLflow.
+        Additionally calculates and logs perplexity based on validation loss
+        when both validation loss and validation accuracy are present.
+
+        Args:
+            epoch (int): The current epoch number (0-indexed)
+            logs (dict, optional): Dictionary containing the metric values for this epoch.
+                                  Keys are metric names (e.g., 'loss', 'accuracy',
+                                  'val_loss', 'val_accuracy'). Defaults to None.
+
+        Returns:
+            None
+        """
         logs = logs or {}
         for metric_name, metric_value in logs.items():
             mlflow.log_metric(metric_name, metric_value, step=epoch)
@@ -1106,11 +1266,42 @@ class MLFlowMetricsCallback(tf.keras.callbacks.Callback):
                 mlflow.log_metric("perplexity", perplexity, step=epoch)
 
 
-""" custom TensorFlow callback to track numerical stability """
-
-
 class NumericalStabilityCallback(tf.keras.callbacks.Callback):
+    """NumericalStabilityCallback
+
+    A Keras callback for monitoring numerical stability during neural network training.
+
+    This callback tracks various metrics related to numerical stability including:
+    - Loss variance across batches within an epoch
+    - Detection of NaN or infinite loss values
+    - Weight statistics for each layer (mean, variance, maximum absolute value)
+    - Detection of extreme weight values (>1000)
+
+    These metrics are logged to MLflow for experiment tracking and debugging
+    numerical instability issues during training.
+
+    Attributes:
+        log_frequency (int): How often (in epochs) to log detailed metrics. Default is 1.
+        batch_losses (list): Stores loss values for each batch in current epoch.
+        gradient_norms (list): Placeholder for gradient norm tracking (not currently implemented).
+        has_nan_or_inf (bool): Flag indicating if NaN/Inf was detected in current epoch.
+
+    Example:
+        ```python
+        stability_callback = NumericalStabilityCallback(log_frequency=5)
+        model.fit(X_train, y_train, callbacks=[stability_callback])
+        ```
+    """
+
     def __init__(self, log_frequency=1):
+        """__init__
+
+        Initialize the NumericalStabilityCallback.
+
+        Args:
+            log_frequency (int): Frequency (in epochs) at which to log detailed metrics.
+                                Default is 1 (log every epoch).
+        """
         super().__init__()
         self.log_frequency = log_frequency
         self.batch_losses = []
@@ -1118,6 +1309,18 @@ class NumericalStabilityCallback(tf.keras.callbacks.Callback):
         self.has_nan_or_inf = False
 
     def on_batch_end(self, batch, logs=None):
+        """on_batch_end
+
+        Called at the end of each training batch to collect loss values.
+
+        Stores the batch loss for later variance calculation and checks for
+        NaN or infinite loss values that indicate numerical instability.
+
+        Args:
+            batch (int): Index of the current batch within the current epoch.
+            logs (dict, optional): Dictionary containing the loss and metric values
+                                  for this batch. Expected to contain 'loss' key.
+        """
         # Store batch losses to compute variance later
         if logs and "loss" in logs:
             self.batch_losses.append(logs["loss"])
@@ -1127,6 +1330,22 @@ class NumericalStabilityCallback(tf.keras.callbacks.Callback):
                 self.has_nan_or_inf = True
 
     def on_epoch_end(self, epoch, model, logs=None):
+        """on_epoch_end
+
+        Called at the end of each epoch to compute and log stability metrics.
+
+        Logs the following metrics to MLflow (if epoch matches log_frequency):
+        - Loss variance across all batches in the epoch
+        - Whether NaN/Inf values were detected
+        - Weight statistics (mean, variance, max) for each layer
+        - Whether extreme weight values (>1000) exist in each layer
+
+        Args:
+            epoch (int): Index of the current epoch.
+            model (tf.keras.Model): The model being trained.
+            logs (dict, optional): Dictionary containing the loss and metric values
+                                  averaged over the epoch.
+        """
         if epoch % self.log_frequency == 0:
             # Log gradient norms for a few layers (requires custom training loop or grad tape)
             # For simplicity, we're logging other metrics here
@@ -1178,35 +1397,3 @@ class NumericalStabilityCallback(tf.keras.callbacks.Callback):
                     ):
                         # This would require custom tracking during forward pass
                         pass
-
-
-"""
-class MLFlowCallback(tf.keras.callbacks.Callback):
-    def __init__(self, run):
-        super().__init__()
-        self.run = run
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        for metric_name, metric_value in logs.items():
-            mlflow.log_metric(metric_name, metric_value, step=epoch)
-"""
-
-""" 
-    # Register cleanup function to terminate the server when the script ends
-def cleanup():
-        if process.poll() is None:  # If process is still running
-            if os.name == 'nt':  # Windows
-                subprocess.call(['taskkill', '/F', '/T', '/PID', str(process.pid)])
-            else:  # Unix/Linux/MacOS
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-    
-    atexit.register(cleanup)
-    
-    # Set the tracking URI to point to our server
-    mlflow.set_tracking_uri(f"http://127.0.0.1:{port}")
-    print(f"MLFlow server started on port {port}")
-    
-    return process
-
-"""
