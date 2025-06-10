@@ -2,7 +2,7 @@
 
 Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing.
 
-This is not for production. You can use this code to learn about generative language models, preprocessing, and training hyperparameters.
+This is not for production. You can use this code to learn about generative language models, preprocessing, training, and model hyperparameters.
 
 ## Installation
 
@@ -26,7 +26,9 @@ Complete the installation:
 
 ```sh
 > python3 sLAM/make-slam.py -h
-usage: make-slam.py [-h] [-t TEXT_PERCENTAGE] [-m MIN_SENTENCE_LEN] [-n NAME] [--temperature TEMPERATURE] [--epochs EPOCHS] [--d_model D_MODEL] [-d DOWNLOAD] [--num_rows NUM_ROWS] -p PROMPT [-v]
+usage: make-slam.py [-h] [-t TEXT_PERCENTAGE] [--context_size CONTEXT_SIZE] [-n NAME] [--temperature TEMPERATURE]
+                    [--epochs EPOCHS] [--d_model D_MODEL] [-d DOWNLOAD] [--num_rows NUM_ROWS] [--use_mlflow] 
+                    -p PROMPT [-v]
 
 options:
   -h, --help            show this help message and exit
@@ -34,14 +36,18 @@ options:
                         Percentage of download used to make dataset
   -m MIN_SENTENCE_LEN, --min_sentence_len MIN_SENTENCE_LEN
                         Percentage of input text used to make dataset
-  -n NAME, --name NAME  Name used to save files, default is timestamp of completion
+  -n NAME, --name NAME  Name used to save files, default is timestamp of start time
   --temperature TEMPERATURE
                         Temperature used for generation
   --epochs EPOCHS       Number of epochs
   --d_model D_MODEL     Number of epochs
+  --context_size CONTEXT_SIZE     
+                        Context size
   -d DOWNLOAD, --download DOWNLOAD
-                        Dataset to download
+                        Dataset to download. Default is cc_news.
   --num_rows NUM_ROWS   Number of rows to download from cc_news
+  --use_mlflow USE_MLFLOW   
+                        Use MLFlow for model tracking
   -p PROMPT, --prompt PROMPT
                         Prompt
   -v, --verbose         Verbose
@@ -73,19 +79,12 @@ Supply the name of the model and the serialized tokenizer, and a prompt:
 
 ```sh
 python3 sLAM/generate.py -n 04-01-2025-05-09-04 -p "This is a test"
-This is a test if your favorite software is the news service for the bottom of the increasing equipment market is actually plans for their concerns and the narrative of the same time i think it was the course of the technology is that the 5th us and i think what we are the most youre doing it we do to do that you want what to avoid the first amendment and other candidates are not just as the most
+This is a test if your favorite software is the news service for the bottom of the increasing equipment market is actually plans for their concerns and the narrative of the same time i think it was the course of the technology is that the 5th us and i think what we are the most youre doing it we do to do that you want what to avoid the first amendment and other candidates are not just as the most.
 ```
-
-## Operating Notes
-
-* Reducing the size of the input text with *--num_rows* can eliminate OOM errors on the RTX 5000.
-* Reducing the size of the embedding with *--d_model* significantly reduces training time, e.g. from 20ms/step to 5ms/step
-* *context_size* should be related to chunk size, which averages about 38 tokens for the cc_news data
-* Reducing *context_size* reduces time per step but also reduces accuracy, so more training may be required
 
 ### Library and package versions
 
-One of the challenges in writing and running Deep Learning code is how many components there are, and how quickly new versions of these components appear. To get all your component versions aligned started with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or Pytorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
+One of the challenges in writing and running Deep Learning code is how many components there are, and how quickly new versions of these components appear. To get all your component versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or Pytorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
 
 RTX 5000 + CUDA 11.8 + Tensorflow 2.12 + Python 3.8
 
@@ -93,9 +92,10 @@ Then the Python dependencies will follow from the Python version.
 
 *Getting these versions aligned is critical*, because if the versions are out of alignment you may get errors of various kinds that do not reference versions but are more generic and difficult to debug, like out-of-memory errors.
 
-### Using Tensorflow from a container at TACC
+#### Using Tensorflow from a container
 
-Containers may be available that package the right versions of CUDA with some framework. At TACC run an interactive job using `srun` or `idev` to download a container made by NVIDIA.
+Containers may be available that package the right versions of CUDA with some framework. For example,
+at TACC you can download a container made by NVIDIA which supplies CUDA, Python, and Tensorflow:
 
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash

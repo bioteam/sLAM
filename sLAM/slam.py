@@ -520,7 +520,7 @@ class slam_builder:
         import matplotlib.pyplot as plt
 
         plt.hist(token_counts, bins=30)
-        plt.title("Distribution of Wikipedia Sentence Lengths")
+        plt.title(f"Distribution of {self.download} Sentence Lengths")
         plt.xlabel("Number of Tokens")
         plt.ylabel("Frequency")
         plt.savefig("sentence_length_distribution.png")
@@ -716,7 +716,8 @@ class slam_builder:
 
         Important Characteristics:
 
-        - Sequence-based: Unlike image classification where one image = one sample, LLM samples are sequences of tokens
+        - Sequence-based: Unlike image classification where one image = one sample, LLM samples are
+          sequences of tokens
         - Context window: The sample length is determined by the model's context window (maximum sequence length)
         - Batching: Multiple samples are grouped into batches for efficient processing
         - Tokenization: Raw text must be tokenized before becoming samples
@@ -869,14 +870,12 @@ class slam_builder:
     def save(self, model):
         """save
 
-        Save model and tokenizer. Use a timestamp if no name is supplied.
+        Save model and tokenizer separately.
 
         Arguments:
             model -- trained model
 
         Returns: none
-
-        In Tensorflow the tokenizer is usually not saved with the model, they must be saved separately.
         """
         model.save(f"{self.name}.keras")
         if self.verbose:
