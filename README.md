@@ -71,7 +71,7 @@ This creates a Keras model (~1M tokens) and a saved (serialized) tokenizer with 
 -rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
 ```
 
-One epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above.
+One epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above. However, more text than that needs to be used to generate realistic English.
 
 ### Generate using an existing model
 
@@ -84,7 +84,7 @@ This is a test if your favorite software is the news service for the bottom of t
 
 ### Library and package versions
 
-One of the challenges in writing and running Deep Learning code is how many components there are, and how quickly new versions of these components appear. To get all your component versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or Pytorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
+One of the challenges in writing and running Deep Learning code is how many components there are, and how quickly new versions of these components appear. To get all your component versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or PyTorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
 
 RTX 5000 + CUDA 11.8 + Tensorflow 2.12 + Python 3.8
 
