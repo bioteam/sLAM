@@ -101,7 +101,7 @@ class slam_builder:
 
         self.token_ids = list()
 
-        """Start up the MLFlow server it it's not already running"""
+        """Set up the MLFlow server"""
         self.mlflow_pid = None
         self.mlflow_port = 9999
         if self.use_mlflow:

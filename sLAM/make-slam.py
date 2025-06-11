@@ -87,6 +87,9 @@ builder.create_tokenizer()
 
 builder.adapt(texts)
 
+if args.use_mlflow:
+    builder.start_mlflow_server()
+
 train_dataset, val_dataset = builder.prepare_datasets(texts)
 
 model = builder.create_small_gpt2_model()
@@ -101,4 +104,5 @@ if args.verbose:
 result = builder.generate_text(args.prompt, model)
 print(f"Result: {result}")
 
-builder.cleanup()
+if args.use_mflow:
+    builder.cleanup()
