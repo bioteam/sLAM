@@ -100,11 +100,11 @@ at TACC you can download a container made by NVIDIA which supplies CUDA, Python,
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
 module load tacc-apptainer
-apptainer pull docker://tensorflow/tensorflow:2.12.0-gpu
+apptainer pull docker://tensorflow/tensorflow:2.17.0-gpu
 ```
 
-Once the container is downloaded you can run it with `singularity`.
+Once the container is downloaded you can run your script with `singularity`.
 
 ```sh
-singularity shell --nv tensorflow_2.12.0-gpu.sif
+singularity exec --nv ~/tensorflow_2.17.0-gpu.sif python3 scripts/mnist_convnet.py 
 ```

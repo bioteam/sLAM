@@ -14,12 +14,10 @@ import pickle
 import re
 import os
 import subprocess
-import time
 import signal
-import atexit
 import mlflow
 from mlflow.tensorflow import autolog
-from mlflow.tensorflow import MlflowCallback
+from mlflow.tensorflow.callback import MlflowCallback
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -57,7 +55,7 @@ class slam_builder:
         temperature: float = 0,
         stride: int = 4,
         use_mlflow: bool = False,
-        download: str = None,  # type: Ignore
+        download: str = None,  # type: ignore
         num_rows: int = 0,
     ):
         """__init__
@@ -104,8 +102,6 @@ class slam_builder:
         """Set up the MLFlow server"""
         self.mlflow_pid = None
         self.mlflow_port = 9999
-        if self.use_mlflow:
-            self.start_mlflow_server()
 
         """ Set memory growth to avoid OOM issues """
         gpus = tf.config.list_physical_devices("GPU")
@@ -1164,8 +1160,7 @@ class slam_builder:
         except Exception as e:
             print(f"Error starting MLFlow: {e}")
 
-    @atexit.register
-    def cleanup(self):
+    def stop_mlflow_server(self):
         if self.mlflow_process.poll() is None:  # If process is still running
             if os.name == "nt":  # Windows
                 subprocess.call(

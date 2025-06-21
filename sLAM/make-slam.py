@@ -105,4 +105,4 @@ result = builder.generate_text(args.prompt, model)
 print(f"Result: {result}")
 
 if args.use_mflow:
-    builder.cleanup()
+    builder.stop_mlflow_server()
