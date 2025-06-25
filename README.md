@@ -94,8 +94,7 @@ Then the Python dependencies will follow from the Python version.
 
 #### Using Tensorflow from a container
 
-Containers may be available that package the right versions of CUDA with some framework. For example,
-at TACC you can download a container made by NVIDIA which supplies CUDA, Python, and Tensorflow:
+Containers may be available that package all the right versions of CUDA and Python with some framework. For example, at Texas Advanced Computing Center you can download a Tensorflow container from NVIDIA:
 
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
@@ -103,8 +102,14 @@ module load tacc-apptainer
 apptainer pull docker://tensorflow/tensorflow:2.17.0-gpu
 ```
 
-Once the container is downloaded you can run your script with `singularity`.
+Or just:
 
 ```sh
-singularity exec --nv ~/tensorflow_2.17.0-gpu.sif python3 scripts/mnist_convnet.py 
+docker pull docker://tensorflow/tensorflow:2.17.0-gpu
+```
+
+Then you can run your script with `singularity`.
+
+```sh
+singularity exec --nv tensorflow_2.17.0-gpu.sif python3 scripts/mnist_convnet.py 
 ```
