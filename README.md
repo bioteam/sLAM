@@ -53,14 +53,14 @@ options:
   -v, --verbose         Verbose
 ```
 
-The code uses *wikitext-2-v1* or *cs_news* from Hugging Face as training text, e.g. *-d cs_news*.
+The code uses *cs_news* (the default) or *wikitext-2-v1* from Hugging Face as training text.
 
 ### Build a model
 
 Download and clean training data from *cs_news*, create a model, train the model the cleaned chunks for 3 epochs, be verbose, and try the given prompt:
 
 ```sh
-python3 sLAM/make-slam.py -d cs_news --num_rows 500 -v --epochs 3 -p "This is a test"
+python3 sLAM/make-slam.py --num_rows 500 -v --epochs 3 -p "This is a test"
 ```
 
 This creates a Keras model (~1M tokens) and a saved (serialized) tokenizer with the same name, and a histogram of sentence lengths. for example:
@@ -71,7 +71,7 @@ This creates a Keras model (~1M tokens) and a saved (serialized) tokenizer with 
 -rw-r--r--    19K Mar 31 16:04 sentence_length_distribution.png
 ```
 
-One epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above. However, more text than that needs to be used to generate realistic English.
+One epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above. However, more text than that needs to be used to generate syntactically correct English.
 
 ### Generate using an existing model
 
@@ -94,7 +94,7 @@ Then the Python dependencies will follow from the Python version.
 
 #### Using Tensorflow from a container
 
-Containers may be available that package all the right versions of CUDA and Python with some framework. For example, at Texas Advanced Computing Center you can download a Tensorflow container from NVIDIA:
+Containers may be available that package all the right versions of CUDA and Python with some framework. In this example we're computing at Texas Advanced Computing Center and downloading a Tensorflow container from NVIDIA:
 
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
