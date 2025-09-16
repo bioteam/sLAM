@@ -109,7 +109,7 @@ apptainer pull docker://tensorflow/tensorflow:2.17.0-gpu
 Or just:
 
 ```sh
-docker pull docker://tensorflow/tensorflow:2.17.0-gpu
+docker pull tensorflow/tensorflow:2.17.0-gpu
 ```
 
 Then you can run your script with `singularity`.
