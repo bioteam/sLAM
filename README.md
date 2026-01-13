@@ -88,7 +88,7 @@ the first amendment and other candidates are not just as the most.
 
 ## TensorFlow Architecture and Components
 
-The sLAM project implements a small GPT-2-style transformer language model using TensorFlow/Keras. Here's a detailed explanation of the key components and how they work together:
+The sLAM code implements a small GPT-2-style transformer language model using TensorFlow/Keras. Here's a detailed explanation of the key components and how they work together:
 
 ### Model Architecture Overview
 
@@ -98,7 +98,7 @@ The model is a **decoder-only transformer** - a type of neural network architect
 
 #### 1. Token and Positional Embeddings
 
-**Token Embeddings**: Convert each word/subword token into a dense vector representation (e.g., 256-dimensional). These embeddings learn to capture semantic meaning - similar words end up with similar vector representations.
+**Token Embeddings**: Convert each word token into a dense vector representation (e.g., 256-dimensional). These embeddings learn to capture semantic meaning - similar words end up with similar vector representations.
 
 **Positional Embeddings**: Since transformers process all tokens simultaneously (unlike RNNs), they need explicit position information. Positional embeddings encode where each token appears in the sequence, allowing the model to understand word order and syntax.
 
@@ -208,7 +208,7 @@ This sLAM model is significantly **smaller** than production models like GPT-3 i
 - sLAM: Trainable on consumer hardware (few GB RAM, optional GPU)
 - GPT-3: Required thousands of high-end GPUs and months of training
 
-Despite being much smaller, this architecture demonstrates the core principles behind modern large language models and provides an excellent learning platform for understanding transformer-based text generation without requiring massive computational resources.
+Despite being much smaller, this architecture demonstrates the core principles behind modern large language models and provides a learning platform for understanding transformer-based text generation without requiring massive computational resources.
 
 ### Library and package versions
 
