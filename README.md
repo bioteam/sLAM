@@ -124,7 +124,7 @@ Each transformer block contains:
 
 The model stacks multiple transformer blocks (default: 4 layers) to build increasingly complex representations.
 
-#### 4. Model Parameters Explained
+#### 4. Default Parameters Explained
 
 - **vocab_size (50,000)**: Number of unique tokens the model can understand/generate
 - **context_size (32)**: Maximum sequence length the model can process at once (the "memory window")  
@@ -216,13 +216,13 @@ One of the challenges in writing and running Deep Learning code is how many comp
 
 RTX 5000 + CUDA 11.8 + Tensorflow 2.17 + Python 3.8
 
-Then the Python dependencies will follow from the Python version.
+Then all the other Python dependencies (e.g. pandas, numpy) will follow from the Python version.
 
 *Getting these versions aligned is critical*, because if the versions are out of alignment you may get errors of various kinds that do not reference versions and are difficult to debug, like out-of-memory or data shape errors.
 
 #### Using Tensorflow from a container
 
-Containers may be available that package all the right versions, e.g. CUDA and Python with some framework. In this example we're computing at Texas Advanced Computing Center and downloading a Tensorflow container from NVIDIA:
+Containers may be available that package all the right versions, e.g. of CUDA, Python, and Tensorflow. In this example we're computing at Texas Advanced Computing Center and downloading a Tensorflow container from NVIDIA:
 
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
