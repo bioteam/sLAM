@@ -16,6 +16,7 @@ import os
 import subprocess
 import signal
 import mlflow
+import nltk  # Add missing import
 from mlflow.tensorflow import autolog
 from mlflow.tensorflow.callback import MlflowCallback
 from tensorflow.keras import layers  # type: ignore
@@ -753,9 +754,22 @@ class slam_builder:
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        train_dataset_size = tf.data.experimental.cardinality(
-            train_dataset
-        ).numpy()
+        # Safely get dataset size - handle resource dtype issue
+        try:
+            cardinality = tf.data.experimental.cardinality(train_dataset)
+            if cardinality == tf.data.experimental.UNKNOWN_CARDINALITY:
+                # Estimate dataset size if cardinality is unknown
+                train_dataset_size = 1000  # Default fallback value
+                if self.verbose:
+                    print("Warning: Dataset cardinality is unknown, using default value for decay_steps calculation")
+            else:
+                train_dataset_size = int(cardinality)
+        except (ValueError, TypeError) as e:
+            # Fallback if cardinality conversion fails
+            train_dataset_size = 1000  # Default fallback value
+            if self.verbose:
+                print(f"Warning: Could not determine dataset cardinality ({e}), using default value for decay_steps calculation")
+        
         decay_steps = self.epochs * train_dataset_size // self.batch_size
 
         """Learning rate schedule"""
@@ -828,7 +842,7 @@ class slam_builder:
                 run_name=self.name,
                 nested=True,
                 description="sLAM",
-                log_system_metrics=["CPU", "GPU"],
+                log_system_metrics=True,
             ):
                 mlflow.log_param("batch_size", self.batch_size)
                 mlflow.log_param("epochs", self.epochs)
