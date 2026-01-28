@@ -950,8 +950,22 @@ class slam_builder:
         if self.verbose:
             print(f"generate_text() - prompt_ids: {prompt_ids}")
 
+        # Safely convert to numpy and reshape - handle resource tensor issue
+        try:
+            # Convert to numpy array safely
+            if hasattr(prompt_ids, 'numpy'):
+                prompt_ids_array = prompt_ids.numpy()
+            else:
+                # If it's already a numpy array or regular tensor
+                prompt_ids_array = np.array(prompt_ids)
+        except (ValueError, TypeError) as e:
+            if self.verbose:
+                print(f"Warning: Could not convert tensor to numpy ({e}), attempting alternative conversion")
+            # Alternative conversion method
+            prompt_ids_array = tf.make_ndarray(tf.make_tensor_proto(prompt_ids))
+        
         # Reshape and add a batch dimension
-        prompt_ids = prompt_ids.numpy().reshape(1, -1)
+        prompt_ids = prompt_ids_array.reshape(1, -1)
 
         """Generate text token by token
             
@@ -983,9 +997,16 @@ class slam_builder:
             scaled_predictions = predictions / self.temperature
 
             # Sample next token
-            predicted_id = tf.random.categorical(
+            predicted_tensor = tf.random.categorical(
                 tf.expand_dims(scaled_predictions, 0), num_samples=1
-            )[0, 0].numpy()
+            )[0, 0]
+            
+            # Safely convert predicted token to integer
+            try:
+                predicted_id = int(predicted_tensor.numpy())
+            except (ValueError, TypeError):
+                # Alternative conversion if .numpy() fails
+                predicted_id = int(predicted_tensor)
 
             # Update input context by shifting left and adding new token
             prompt_ids = np.roll(prompt_ids, -1, axis=1)
