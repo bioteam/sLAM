@@ -10,7 +10,7 @@ parser.add_argument(
     "--text_percentage",
     default=1,
     type=int,
-    help="Percentage of download used to make dataset",
+    help="Percentage of wikitext-2-v1 used to make dataset",
 )
 parser.add_argument(
     "--context_size",
@@ -39,10 +39,14 @@ parser.add_argument(
     "--d_model",
     type=int,
     default=256,
-    help="Number of epochs",
+    help="Number of embedding dimensions",
 )
 parser.add_argument(
-    "-d", "--download", type=str, help="Dataset to download", default="cc_news"
+    "-d",
+    "--download",
+    choices=["wikitext-2-v1", "cc_news"],
+    help="Dataset to download",
+    default="cc_news",
 )
 parser.add_argument(
     "--num_rows",
@@ -77,8 +81,6 @@ if args.download == "wikitext-2-v1":
 elif args.download == "cc_news":
     cc_texts = load_dataset("cc_news", split=f"train[:{args.num_rows}]")
     texts = builder.clean_cc_news(cc_texts)
-else:
-    sys.exit(f"Unknown download: {args.download}")
 
 if args.verbose:
     builder.analyze_text(texts)

@@ -40,7 +40,7 @@ options:
   --temperature TEMPERATURE
                         Temperature used for generation
   --epochs EPOCHS       Number of epochs
-  --d_model D_MODEL     Number of epochs
+  --d_model D_MODEL     Number of embedding dimensions
   --context_size CONTEXT_SIZE     
                         Context size
   -d DOWNLOAD, --download DOWNLOAD
