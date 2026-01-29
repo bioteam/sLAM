@@ -31,6 +31,55 @@ from sklearn.model_selection import train_test_split
 tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
 
+@tf.keras.utils.register_keras_serializable(package="sLAM")
+class TokenAndPositionEmbedding(layers.Layer):
+    """
+    TokenAndPositionEmbedding
+
+    Combines token embeddings with learned positional embeddings.
+
+    Arguments:
+        vocab_size -- Size of the vocabulary/token dictionary
+        context_size -- Maximum sequence length for input contexts
+        d_model -- Dimensionality of the embedding space
+
+    Returns:
+        Embedded token representations with positional information
+    """
+
+    def __init__(self, vocab_size, context_size, d_model, **kwargs):
+        super().__init__(**kwargs)
+        self.vocab_size = vocab_size
+        self.context_size = context_size
+        self.d_model = d_model
+        self.token_emb = layers.Embedding(
+            input_dim=vocab_size, output_dim=d_model, name="token_embeddings"
+        )
+        self.pos_emb = layers.Embedding(
+            input_dim=context_size,
+            output_dim=d_model,
+            name="position_embeddings",
+        )
+
+    def call(self, inputs):
+        seq_len = tf.shape(inputs)[1]
+        positions = tf.range(start=0, limit=seq_len, delta=1)
+        position_embeddings = self.pos_emb(positions)
+        token_embeddings = self.token_emb(inputs)
+        return token_embeddings + position_embeddings
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocab_size": self.vocab_size,
+                "context_size": self.context_size,
+                "d_model": self.d_model,
+            }
+        )
+        return config
+
+
 class slam_builder:
     """
     A simple language model using transformer decoder-only architecture.
@@ -44,6 +93,7 @@ class slam_builder:
         name: str = None,  # type: ignore
         vocab_size: int = 50000,
         context_size: int = 0,
+        min_chunk_len: int = 50,
         # Same as embedding_dim:
         d_model: int = 0,
         n_layers: int = 4,
@@ -81,6 +131,7 @@ class slam_builder:
         self.name = name
         self.vocab_size = vocab_size
         self.context_size = context_size
+        self.min_chunk_len = min_chunk_len
         self.d_model = d_model
         self.n_layers = n_layers
         self.n_heads = n_heads
@@ -289,25 +340,16 @@ class slam_builder:
         In this code d_model is set to 256 by default (vector with 256 floats), which is small
         compared to larger models like GPT-2 (which uses 768 in its smallest version).
         """
-        # Input tokens and positional embeddings
+        # Input tokens and combined positional embeddings
         input_ids = layers.Input(
             shape=(self.context_size,), dtype=tf.int32, name="input_ids"
         )
-
-        # Embedding layer
-        token_embeddings = layers.Embedding(
-            input_dim=self.vocab_size,
-            output_dim=self.d_model,
-            name="token_embeddings",
+        x = TokenAndPositionEmbedding(
+            vocab_size=self.vocab_size,
+            context_size=self.context_size,
+            d_model=self.d_model,
+            name="token_and_position_embeddings",
         )(input_ids)
-
-        # Positional embeddings
-        positions = tf.range(start=0, limit=self.context_size, delta=1)
-        position_embeddings = layers.Embedding(
-            input_dim=self.context_size,
-            output_dim=self.d_model,
-            name="position_embeddings",
-        )(positions)
 
         """
         Token Embedding vs. Positional Embedding
@@ -351,14 +393,6 @@ class slam_builder:
         without position information.
         """
 
-        # Make positional encodings broadcastable to batch dimension
-        position_embeddings = tf.expand_dims(
-            position_embeddings, axis=0
-        )  # Shape: [1, seq_len, d_model]
-        # Now this should work with token embeddings of shape [batch_size, seq_len, d_model]
-
-        # Add token and position embeddings
-        x = layers.Add()([token_embeddings, position_embeddings])
         x = layers.Dropout(self.dropout_rate)(x)
 
         # Transformer blocks
@@ -473,32 +507,34 @@ class slam_builder:
 
         return text
 
-    def analyze_text(self, sentences):
+    def analyze_text(self, chunks):
         """analyze_text
 
         Analyze sentence lengths and create a histogram. Create a dedicated tokenizer for analysis
         without the output_sequence_length parameter so it does not pad with 0's.
 
         Arguments:
-            sentences -- list of strings
+            chunks -- list of strings
 
         """
         analysis_tokenizer = layers.TextVectorization(
             max_tokens=50000,
             output_mode="int",
         )
-        analysis_tokenizer.adapt(sentences)
+        analysis_tokenizer.adapt(chunks)
 
         token_counts = []
-        for sentence in sentences:
-            tokens = analysis_tokenizer(sentence)
+        chunk_lengths = []
+        for chunk in chunks:
+            tokens = analysis_tokenizer(chunk)
             token_counts.append(len(tokens))
+            chunk_lengths.append(len(chunk))
 
         print(
-            f"analyze_text() - mean sentence length: {np.mean(token_counts):.1f} tokens"
+            f"analyze_text() - mean chunk length: {np.mean(token_counts):.1f} tokens"
         )
         print(
-            f"analyze_text() - median sentence length: {np.median(token_counts):.1f} tokens"
+            f"analyze_text() - median chunk length: {np.median(token_counts):.1f} tokens"
         )
         print(
             f"analyze_text() - 95th percentile: {np.percentile(token_counts, 95):.1f} tokens"
@@ -507,20 +543,26 @@ class slam_builder:
             f"analyze_text() - 99th percentile: {np.percentile(token_counts, 99):.1f} tokens"
         )
         print(
-            f"analyze_text() - max sentence length: {np.max(token_counts)} tokens"
+            f"analyze_text() - max chunk length: {np.max(token_counts)} tokens"
         )
         print(
-            f"analyze_text() - min sentence length: {np.min(token_counts)} tokens"
+            f"analyze_text() - min chunk length: {np.min(token_counts)} tokens"
         )
 
         # Histogram
         import matplotlib.pyplot as plt
 
         plt.hist(token_counts, bins=30)
-        plt.title(f"Distribution of {self.download} Sentence Lengths")
+        plt.title(f"Distribution of {self.download} Tokens per Chunk")
         plt.xlabel("Number of Tokens")
         plt.ylabel("Frequency")
-        plt.savefig("sentence_length_distribution.png")
+        plt.savefig("token_number_distribution.png")
+
+        plt.hist(chunk_lengths, bins=30)
+        plt.title(f"Distribution of {self.download} Chunk lengths")
+        plt.xlabel("Number of Characters")
+        plt.ylabel("Frequency")
+        plt.savefig("chunk_length_distribution.png")
 
     def prepare_datasets(
         self,
@@ -761,15 +803,19 @@ class slam_builder:
                 # Estimate dataset size if cardinality is unknown
                 train_dataset_size = 1000  # Default fallback value
                 if self.verbose:
-                    print("Warning: Dataset cardinality is unknown, using default value for decay_steps calculation")
+                    print(
+                        "Warning: Dataset cardinality is unknown, using default value for decay_steps calculation"
+                    )
             else:
                 train_dataset_size = int(cardinality)
         except (ValueError, TypeError) as e:
             # Fallback if cardinality conversion fails
             train_dataset_size = 1000  # Default fallback value
             if self.verbose:
-                print(f"Warning: Could not determine dataset cardinality ({e}), using default value for decay_steps calculation")
-        
+                print(
+                    f"Warning: Could not determine dataset cardinality ({e}), using default value for decay_steps calculation"
+                )
+
         decay_steps = self.epochs * train_dataset_size // self.batch_size
 
         """Learning rate schedule"""
@@ -860,20 +906,39 @@ class slam_builder:
                 train_dataset, callbacks=callbacks, **fit_params
             )
 
-        val_loss = self.history.history["val_loss"]
-        val_accuracy = self.history.history["val_accuracy"]
-        if self.verbose:
-            print(f"val_loss: {val_loss[-1]}")
-            print(f"val_accuracy: {val_accuracy[-1]}")
+        history_metrics = self.history.history
+        val_loss = history_metrics.get("val_loss", [])
+        val_accuracy = history_metrics.get("val_accuracy", [])
+        train_loss = history_metrics.get("loss", [])
+        train_accuracy = history_metrics.get("accuracy", [])
 
-        if self.use_mlflow and val_loss:
-            mlflow.log_metric("loss", val_loss[-1])
-            mlflow.log_metric("accuracy", val_accuracy[-1])
+        last_val_loss = self._scalar_metric(val_loss[-1]) if val_loss else None
+        last_val_accuracy = (
+            self._scalar_metric(val_accuracy[-1]) if val_accuracy else None
+        )
+        last_train_loss = (
+            self._scalar_metric(train_loss[-1]) if train_loss else None
+        )
+        last_train_accuracy = (
+            self._scalar_metric(train_accuracy[-1]) if train_accuracy else None
+        )
+
+        if self.verbose:
+            if last_val_loss is not None:
+                print(f"val_loss: {last_val_loss}")
+            if last_val_accuracy is not None:
+                print(f"val_accuracy: {last_val_accuracy}")
+
+        if self.use_mlflow:
+            if last_val_loss is not None:
+                mlflow.log_metric("loss", last_val_loss)
+            if last_val_accuracy is not None:
+                mlflow.log_metric("accuracy", last_val_accuracy)
             # You can also log training metrics
-            train_loss = self.history.history["loss"]
-            train_accuracy = self.history.history["accuracy"]
-            mlflow.log_metric("train_loss", train_loss[-1])
-            mlflow.log_metric("train_accuracy", train_accuracy[-1])
+            if last_train_loss is not None:
+                mlflow.log_metric("train_loss", last_train_loss)
+            if last_train_accuracy is not None:
+                mlflow.log_metric("train_accuracy", last_train_accuracy)
 
         return model
 
@@ -890,10 +955,14 @@ class slam_builder:
         model.save(f"{self.name}.keras")
         if self.verbose:
             print(f"save() - saved Keras model: {self.name}.keras")
-        with open(f"{self.name}.pickle", "wb") as p:
-            pickle.dump(self.tokenizer, p, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(f"{self.name}.pkl", "wb") as p:
+            tokenizer_payload = {
+                "config": self.tokenizer.get_config(),
+                "vocab": self.tokenizer.get_vocabulary(),
+            }
+            pickle.dump(tokenizer_payload, p, protocol=pickle.HIGHEST_PROTOCOL)
         if self.verbose:
-            print(f"save() - saved tokenizer: {self.name}.pickle")
+            print(f"save() - saved tokenizer: {self.name}.pkl")
 
     def id_to_word(self, token_id):
         """id_to_word
@@ -907,6 +976,26 @@ class slam_builder:
             Token or None
         """
         return self.index_word.get(token_id, None)
+
+    def _scalar_metric(self, value):
+        """Convert metric outputs to Python floats for stable logging."""
+        if value is None:
+            return None
+        if isinstance(value, tf.Variable):
+            value = value.read_value()
+        if tf.is_tensor(value):
+            value = tf.keras.backend.get_value(value)
+        if isinstance(value, (np.ndarray, np.generic)):
+            try:
+                value = np.asarray(value).item()
+            except ValueError:
+                return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     # Function to generate text
     def generate_text(
@@ -953,17 +1042,21 @@ class slam_builder:
         # Safely convert to numpy and reshape - handle resource tensor issue
         try:
             # Convert to numpy array safely
-            if hasattr(prompt_ids, 'numpy'):
+            if hasattr(prompt_ids, "numpy"):
                 prompt_ids_array = prompt_ids.numpy()
             else:
                 # If it's already a numpy array or regular tensor
                 prompt_ids_array = np.array(prompt_ids)
         except (ValueError, TypeError) as e:
             if self.verbose:
-                print(f"Warning: Could not convert tensor to numpy ({e}), attempting alternative conversion")
+                print(
+                    f"Warning: Could not convert tensor to numpy ({e}), attempting alternative conversion"
+                )
             # Alternative conversion method
-            prompt_ids_array = tf.make_ndarray(tf.make_tensor_proto(prompt_ids))
-        
+            prompt_ids_array = tf.make_ndarray(
+                tf.make_tensor_proto(prompt_ids)
+            )
+
         # Reshape and add a batch dimension
         prompt_ids = prompt_ids_array.reshape(1, -1)
 
@@ -1000,7 +1093,7 @@ class slam_builder:
             predicted_tensor = tf.random.categorical(
                 tf.expand_dims(scaled_predictions, 0), num_samples=1
             )[0, 0]
-            
+
             # Safely convert predicted token to integer
             try:
                 predicted_id = int(predicted_tensor.numpy())
@@ -1016,7 +1109,7 @@ class slam_builder:
             word = self.id_to_word(predicted_id)
             if word:
                 # Stop if we generate an end token
-                if word == "<EOS>":
+                if word.lower() in {"<eos>", "eos", "[eos]"}:
                     prompt += "."
                     break
                 prompt += " " + word
@@ -1032,6 +1125,13 @@ class slam_builder:
         This method processes raw CC-News data by splitting texts on newlines and
         filtering out chunks that don't meet a minimum alphabetic character threshold.
         Only text chunks with more than 70% alphabetic characters are retained.
+
+        Also filters out chunks that are shorter than a specified minimum length.
+        These short chunks are likely not complete sentences, e.g.:
+
+        ['Literary Roots', 'From Page to Stage', 'Out of Russia', 'Across the Country…', 'A Christmas Staple', 'Nutcracker All Over',
+        'Getting In', 'A Typical Day', 'Stage Time', 'Share Us', 'Share Us', 'Installation', 'Configure Apache', 'Accessing Trac', 'Figure A',
+        'Congratulations', 'Also see', 'Also see', 'Setup', 'Figure A', 'Language selection', 'EULA', ...]
 
         Args:
             raw_texts (list): List of dictionaries containing raw text data, where each
@@ -1052,8 +1152,13 @@ class slam_builder:
             subtxts = raw_text["text"].split("\n")
             for subtxt in subtxts:
                 alpha_count = sum(1 for char in subtxt if char.isalpha())
-                if (alpha_count / len(subtxt)) > 0.7:
-                    texts.append(subtxt)
+                if (alpha_count / len(subtxt)) > 0.7 and len(
+                    subtxt
+                ) > self.min_chunk_len:
+                    """Periods are just normal punctuation tokens, not the special <EOS> string.
+                    TextVectorization doesn’t insert <EOS> automatically, so we do that here
+                    to mark the end of each sentence in the chunk."""
+                    texts.append(f"{subtxt.replace('.', '. <EOS>')}")
         if self.verbose:
             print(f"clean_cc_news() - number of text chunks: {len(texts)}")
         return texts
@@ -1099,7 +1204,7 @@ class slam_builder:
                 if "<unk>" not in sentence and "http" not in sentence:
                     # The nltk tokenizer introduces spaces
                     sentence = re.sub(r"\s+([.,?!:;'])", r"\1", sentence)
-                    sentences.append(sentence)
+                    sentences.append(f"{sentence} <EOS>")
         if self.verbose:
             print(
                 f"clean_wikitext() - number of cleaned sentences: {len(sentences)}"
@@ -1135,15 +1240,32 @@ class slam_builder:
             model = slam_instance.load("my_saved_model")
         """
         self.name = name
-        if not os.path.exists(f"{self.name}.pickle"):
-            sys.exit(f"Tokenizer pickle file not found: {self.name}.pickle")
-        with open(f"{self.name}.pickle", "rb") as f:
-            self.tokenizer = pickle.load(f)
+        if not os.path.exists(f"{self.name}.pkl"):
+            sys.exit(f"Tokenizer pickle file not found: {self.name}.pkl")
+        with open(f"{self.name}.pkl", "rb") as f:
+            tokenizer_payload = pickle.load(f)
+            if (
+                isinstance(tokenizer_payload, dict)
+                and "config" in tokenizer_payload
+                and "vocab" in tokenizer_payload
+            ):
+                self.tokenizer = layers.TextVectorization.from_config(
+                    tokenizer_payload["config"]
+                )
+                self.tokenizer.set_vocabulary(tokenizer_payload["vocab"])
+            else:
+                self.tokenizer = tokenizer_payload
         self.create_index()
 
         if not os.path.exists(f"{self.name}.keras"):
             sys.exit(f"Model file not found: {self.name}.keras")
-        model = tf.keras.models.load_model(f"{self.name}.keras")
+        try:
+            model = tf.keras.models.load_model(f"{self.name}.keras")
+        except TypeError as exc:
+            sys.exit(
+                "Model file could not be loaded with the current architecture. "
+                "Re-train and re-save the model to regenerate a compatible .keras file."
+            )
         return model
 
     def start_mlflow_server(self):

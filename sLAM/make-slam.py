@@ -1,5 +1,4 @@
 import argparse
-import sys
 from slam import slam_builder
 from datasets import load_dataset
 
@@ -106,5 +105,5 @@ if args.verbose:
 result = builder.generate_text(args.prompt, model)
 print(f"Result: {result}")
 
-if args.use_mflow:
+if args.use_mlflow:
     builder.stop_mlflow_server()
