@@ -93,7 +93,6 @@ class slam_builder:
         name: str = None,  # type: ignore
         vocab_size: int = 50000,
         context_size: int = 0,
-        min_chunk_len: int = 50,
         # Same as embedding_dim:
         d_model: int = 0,
         n_layers: int = 4,
@@ -131,7 +130,6 @@ class slam_builder:
         self.name = name
         self.vocab_size = vocab_size
         self.context_size = context_size
-        self.min_chunk_len = min_chunk_len
         self.d_model = d_model
         self.n_layers = n_layers
         self.n_heads = n_heads
@@ -1118,11 +1116,11 @@ class slam_builder:
 
         return prompt
 
-    def clean_cc_news(self, raw_texts):
+    def clean_cc_news(self, datasets, min_chunk_len):
         """clean_cc_news
         Clean and filter CC-News text data by extracting high-quality text chunks.
 
-        This method processes raw CC-News data by splitting texts on newlines and
+        This method processes CC-News datasets by splitting texts on newlines and
         filtering out chunks that don't meet a minimum alphabetic character threshold.
         Only text chunks with more than 70% alphabetic characters are retained.
 
@@ -1134,34 +1132,32 @@ class slam_builder:
         'Congratulations', 'Also see', 'Also see', 'Setup', 'Figure A', 'Language selection', 'EULA', ...]
 
         Args:
-            raw_texts (list): List of dictionaries containing raw text data, where each
-                dictionary has a "text" key with the content to be processed.
+            datasets (datasets.arrow_dataset.Dataset): List of dictionaries containing text data, where each
+            dictionary has a "text" key with the content to be processed.
 
         Returns:
             list: A list of cleaned text strings that passed the alphabetic character
                 threshold filter.
-
-        Example:
-            >>> raw_texts = [{"text": "Hello world\n123456\nThis is good text"}]
-            >>> cleaned = self.clean_cc_news(raw_texts)
-            >>> # Returns: ["Hello world", "This is good text"]
-            >>> # "123456" is filtered out due to low alphabetic character ratio
         """
-        texts = list()
-        for raw_text in raw_texts:
-            subtxts = raw_text["text"].split("\n")
+        chunks = list()
+        if self.verbose:
+            print(
+                f"clean_cc_news() - number of cc_news datasets: {len(datasets)}"
+            )
+        for dataset in datasets:
+            subtxts = dataset["text"].split("\n")
             for subtxt in subtxts:
                 alpha_count = sum(1 for char in subtxt if char.isalpha())
                 if (alpha_count / len(subtxt)) > 0.7 and len(
                     subtxt
-                ) > self.min_chunk_len:
+                ) > min_chunk_len:
                     """Periods are just normal punctuation tokens, not the special <EOS> string.
                     TextVectorization doesn’t insert <EOS> automatically, so we do that here
                     to mark the end of each sentence in the chunk."""
-                    texts.append(f"{subtxt.replace('.', '. <EOS>')}")
+                    chunks.append(f"{subtxt.replace('.', '. <EOS>')}")
         if self.verbose:
-            print(f"clean_cc_news() - number of text chunks: {len(texts)}")
-        return texts
+            print(f"clean_cc_news() - number of text chunks: {len(chunks)}")
+        return chunks
 
     def clean_wikitext(self, raw_texts, percentage):
         """clean_wikitext
