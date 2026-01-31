@@ -81,10 +81,11 @@ builder = slam_builder(
 )
 if args.download == "wikitext-2-v1":
     wp_texts = load_dataset("wikitext", "wikitext-2-v1")
-    texts = builder.clean_wikitext(wp_texts, args.text_percentage)
+    chunks = builder.clean_wikitext(wp_texts, args.text_percentage)
 elif args.download == "cc_news":
-    cc_texts = load_dataset("cc_news", split=f"train[:{args.num_datasets}]")
-    chunks = builder.clean_cc_news(cc_texts, args.min_chunk_len)
+    # Download specified number of datasets from cc_news dataset using "split"
+    cc_datasets = load_dataset("cc_news", split=f"train[:{args.num_datasets}]")
+    chunks = builder.clean_cc_news(cc_datasets, args.min_chunk_len)
 
 if args.verbose:
     builder.analyze_text(chunks)
