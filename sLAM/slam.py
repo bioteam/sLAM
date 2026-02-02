@@ -667,6 +667,9 @@ class slam_builder:
         val_dataset,
         model,
         checkpoint_dir="./checkpoints",
+        save_checkpoint_freq=5,  # Save checkpoint every N epochs
+        max_checkpoints_to_keep=3,  # Keep only N best checkpoints
+        cleanup_old_checkpoints=True,  # Whether to delete old checkpoints
     ):
         """train_model
 
@@ -849,9 +852,16 @@ class slam_builder:
             restore_best_weights=True,
             verbose=1,
         )
-        checkpoint_callback = ModelCheckpoint(
-            filepath=checkpoint_prefix, save_weights_only=True
+
+        # Smart checkpoint callback that manages disk space
+        checkpoint_callback = SmartCheckpointCallback(
+            checkpoint_dir=checkpoint_dir,
+            save_checkpoint_freq=save_checkpoint_freq,
+            max_checkpoints_to_keep=max_checkpoints_to_keep,
+            cleanup_old_checkpoints=cleanup_old_checkpoints,
+            verbose=self.verbose,
         )
+
         instability_callback = NumericalStabilityCallback()
         validation_callback = ValidationPrintCallback(val_dataset)
         metrics_callback = MLFlowMetricsCallback()
@@ -1257,10 +1267,9 @@ class slam_builder:
             sys.exit(f"Model file not found: {self.name}.keras")
         try:
             model = tf.keras.models.load_model(f"{self.name}.keras")
-        except TypeError as exc:
+        except Exception as e:
             sys.exit(
-                "Model file could not be loaded with the current architecture. "
-                "Re-train and re-save the model to regenerate a compatible .keras file."
+                f"Model file could not be loaded with the current architecture. Error: {e}"
             )
         return model
 
@@ -1412,6 +1421,181 @@ class MLFlowMetricsCallback(tf.keras.callbacks.Callback):
                 # Calculate perplexity (a common LM metric)
                 perplexity = np.exp(logs["val_loss"])
                 mlflow.log_metric("perplexity", perplexity, step=epoch)
+
+
+class SmartCheckpointCallback(tf.keras.callbacks.Callback):
+    """SmartCheckpointCallback
+
+    A space-efficient checkpoint callback that manages disk usage by:
+    1. Saving checkpoints only at specified intervals (not every epoch)
+    2. Keeping only the N best checkpoints based on validation loss
+    3. Automatically cleaning up old/worse checkpoints
+    4. Providing detailed logging about checkpoint management
+
+    This callback is designed to prevent disk space issues during long training runs
+    with large models that generate huge checkpoint files.
+    """
+
+    def __init__(
+        self,
+        checkpoint_dir="./checkpoints",
+        save_checkpoint_freq=5,
+        max_checkpoints_to_keep=3,
+        cleanup_old_checkpoints=True,
+        verbose=True,
+        monitor="val_loss",
+        mode="min",
+    ):
+        """Initialize the SmartCheckpointCallback.
+
+        Args:
+            checkpoint_dir (str): Directory to save checkpoints
+            save_checkpoint_freq (int): Save checkpoint every N epochs
+            max_checkpoints_to_keep (int): Maximum number of checkpoints to keep
+            cleanup_old_checkpoints (bool): Whether to delete old checkpoints
+            verbose (bool): Whether to print checkpoint management messages
+            monitor (str): Metric to monitor for keeping best checkpoints
+            mode (str): "min" or "max" - whether lower or higher metric values are better
+        """
+        super().__init__()
+        self.checkpoint_dir = checkpoint_dir
+        self.save_checkpoint_freq = save_checkpoint_freq
+        self.max_checkpoints_to_keep = max_checkpoints_to_keep
+        self.cleanup_old_checkpoints = cleanup_old_checkpoints
+        self.verbose = verbose
+        self.monitor = monitor
+        self.mode = mode
+
+        # Track best checkpoints: [(epoch, metric_value, filepath), ...]
+        self.best_checkpoints = []
+
+        # Ensure checkpoint directory exists
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+        if self.verbose:
+            print(f"SmartCheckpointCallback initialized:")
+            print(f"  - Save frequency: every {save_checkpoint_freq} epochs")
+            print(f"  - Max checkpoints to keep: {max_checkpoints_to_keep}")
+            print(
+                f"  - Monitoring: {monitor} ({'minimize' if mode == 'min' else 'maximize'})"
+            )
+            print(f"  - Cleanup enabled: {cleanup_old_checkpoints}")
+
+    def on_epoch_end(self, epoch, logs=None):
+        """Called at the end of each epoch to potentially save checkpoints."""
+        logs = logs or {}
+
+        # Only save checkpoint if it's time (based on frequency)
+        if (epoch + 1) % self.save_checkpoint_freq != 0:
+            return
+
+        # Get the monitored metric value
+        metric_value = logs.get(self.monitor)
+        if metric_value is None:
+            if self.verbose:
+                print(
+                    f"Warning: Monitored metric '{self.monitor}' not found in logs. Skipping checkpoint save."
+                )
+            return
+
+        # Create checkpoint filepath
+        checkpoint_name = f"ckpt_epoch_{epoch+1:03d}_{self.monitor}_{metric_value:.4f}.weights.h5"
+        checkpoint_path = os.path.join(self.checkpoint_dir, checkpoint_name)
+
+        # Save the checkpoint
+        try:
+            self.model.save_weights(checkpoint_path)
+
+            # Get file size for reporting
+            file_size_mb = os.path.getsize(checkpoint_path) / (1024 * 1024)
+
+            if self.verbose:
+                print(
+                    f"Saved checkpoint: {checkpoint_name} ({file_size_mb:.1f} MB)"
+                )
+
+            # Add to our tracking list
+            self.best_checkpoints.append(
+                (epoch + 1, metric_value, checkpoint_path)
+            )
+
+            # Manage checkpoint storage
+            if self.cleanup_old_checkpoints:
+                self._cleanup_checkpoints()
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Error saving checkpoint: {e}")
+
+    def _cleanup_checkpoints(self):
+        """Remove excess checkpoints, keeping only the best ones."""
+        if len(self.best_checkpoints) <= self.max_checkpoints_to_keep:
+            return
+
+        # Sort by metric value (best first)
+        if self.mode == "min":
+            self.best_checkpoints.sort(
+                key=lambda x: x[1]
+            )  # Sort by metric value ascending
+        else:
+            self.best_checkpoints.sort(
+                key=lambda x: x[1], reverse=True
+            )  # Sort by metric value descending
+
+        # Keep only the best checkpoints
+        checkpoints_to_keep = self.best_checkpoints[
+            : self.max_checkpoints_to_keep
+        ]
+        checkpoints_to_remove = self.best_checkpoints[
+            self.max_checkpoints_to_keep :
+        ]
+
+        # Remove excess checkpoint files
+        total_freed_mb = 0
+        for epoch, metric_val, filepath in checkpoints_to_remove:
+            try:
+                if os.path.exists(filepath):
+                    file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                    os.remove(filepath)
+                    total_freed_mb += file_size_mb
+                    if self.verbose:
+                        print(
+                            f"Removed checkpoint: {os.path.basename(filepath)} (freed {file_size_mb:.1f} MB)"
+                        )
+            except Exception as e:
+                if self.verbose:
+                    print(f"Error removing checkpoint {filepath}: {e}")
+
+        # Update our tracking list
+        self.best_checkpoints = checkpoints_to_keep
+
+        if self.verbose and total_freed_mb > 0:
+            print(f"Total disk space freed: {total_freed_mb:.1f} MB")
+
+            # Show current checkpoint status
+            print(f"Keeping {len(checkpoints_to_keep)} best checkpoints:")
+            for epoch, metric_val, filepath in checkpoints_to_keep:
+                file_size_mb = (
+                    os.path.getsize(filepath) / (1024 * 1024)
+                    if os.path.exists(filepath)
+                    else 0
+                )
+                print(
+                    f"  - Epoch {epoch}: {self.monitor}={metric_val:.4f} ({file_size_mb:.1f} MB)"
+                )
+
+    def get_best_checkpoint(self):
+        """Return the path to the best checkpoint."""
+        if not self.best_checkpoints:
+            return None
+
+        # Sort to get the best one
+        if self.mode == "min":
+            best_checkpoint = min(self.best_checkpoints, key=lambda x: x[1])
+        else:
+            best_checkpoint = max(self.best_checkpoints, key=lambda x: x[1])
+
+        return best_checkpoint[2]  # Return filepath
 
 
 class NumericalStabilityCallback(tf.keras.callbacks.Callback):
