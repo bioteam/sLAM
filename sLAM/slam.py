@@ -171,6 +171,16 @@ class slam_builder:
             x -- Transformed tensor with the same shape as the input but processed through
                  self-attention and feed-forward layers
 
+        Components of each transformer block:
+        - Multi-head attention layer with causal masking
+        - Residual connection adding attention output back to input
+        - Layer normalization
+        - Feed-forward network (2 dense layers with GELU activation on first layer)
+        - Dropout layer for regularization (applied after feed-forward)
+        - Second residual connection adding feed-forward output back to input
+        - Layer normalization
+
+
         Purpose of the transformer_block method:
 
         1. Layer Initialization: When transformer blocks are created, the layers (attention, feed-forward
