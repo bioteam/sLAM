@@ -89,5 +89,9 @@ echo ""
 echo "The CI workflow should work correctly."
 echo "You can now push the .github/workflows/test-slam-model.yml file."
 echo ""
-echo "To clean up test files, run:"
-echo "  rm -f test-model.keras test-model.pkl *.png"
+
+# Cleanup test files
+echo "9. Cleaning up test artifacts..."
+rm -f test-model.keras test-model.pkl *.png
+echo "   ✓ Test files cleaned up"
+echo ""

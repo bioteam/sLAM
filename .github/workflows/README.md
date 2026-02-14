@@ -63,9 +63,11 @@ If the workflow fails:
 
 ### Files created
 
-The workflow creates these files (cleaned up after each run):
+The workflow creates these files during the test:
 
 - `test-model.keras` - Keras model file (~few MB with test parameters)
 - `test-model.pkl` - Tokenizer pickle file (~KB)
 - `token_number_distribution.png` - Histogram (if verbose mode)
 - `chunk_length_distribution.png` - Histogram (if verbose mode)
+
+**Note**: All test artifacts are automatically cleaned up after the workflow completes. The files are uploaded as artifacts (retained for 7 days) before cleanup, so you can download them for inspection if needed.
