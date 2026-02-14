@@ -99,7 +99,7 @@ if args.use_mlflow:
 
 train_dataset, val_dataset = builder.prepare_datasets(chunks)
 
-model = builder.create_small_gpt2_model()
+model = builder.create_gpt2_model()
 
 model = builder.train_model(train_dataset, val_dataset, model)
 

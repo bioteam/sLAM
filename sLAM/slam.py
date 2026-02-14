@@ -2,7 +2,6 @@ import os
 
 # Enable asynchronous memory allocation
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
-import mlflow.tensorflow
 import tensorflow as tf
 
 import numpy as np
@@ -15,10 +14,7 @@ import re
 import os
 import subprocess
 import signal
-import mlflow
-import nltk  # Add missing import
-from mlflow.tensorflow import autolog
-from mlflow.tensorflow.callback import MlflowCallback
+import nltk
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
 from tensorflow.keras.optimizers import Adam  # type: ignore
@@ -152,6 +148,7 @@ class slam_builder:
         """Set up the MLFlow server"""
         self.mlflow_pid = None
         self.mlflow_port = 9999
+        self.mlflow_url = "http://127.0.0.1"
 
         """ Set memory growth to avoid OOM issues """
         gpus = tf.config.list_physical_devices("GPU")
@@ -291,10 +288,10 @@ class slam_builder:
         return x
 
     # Create the custom GPT-2 small model
-    def create_small_gpt2_model(
+    def create_gpt2_model(
         self,
     ):
-        """create_small_gpt2_model
+        """create_gpt2_model
 
         Arguments: none
 
@@ -838,9 +835,6 @@ class slam_builder:
 
         optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
 
-        checkpoint_prefix = os.path.join(
-            checkpoint_dir, "ckpt_{epoch}.weights.h5"
-        )
         """        
         Logits in neural networks: When your model makes a prediction for the next token in a sequence, 
         it outputs a vector of real numbers (one for each token in your vocabulary). 
@@ -872,14 +866,11 @@ class slam_builder:
             verbose=self.verbose,
         )
 
-        instability_callback = NumericalStabilityCallback()
         validation_callback = ValidationPrintCallback(val_dataset)
-        metrics_callback = MLFlowMetricsCallback()
 
         callbacks = [
             early_stopping,
             checkpoint_callback,
-            instability_callback,
             validation_callback,
         ]
 
@@ -891,38 +882,15 @@ class slam_builder:
         }
 
         if self.use_mlflow:
-            mlflow.set_tracking_uri(uri=f"http://127.0.0.1:{self.mlflow_port}")
-            autolog(
-                log_models=True,
-                log_input_examples=True,
-                log_model_signatures=True,
-                log_datasets=True,
-                silent=False,
-            )
-            callbacks.append(MlflowCallback())
-            callbacks.append(metrics_callback)
+            self.setup_mlflow(callbacks)
 
-            with mlflow.start_run(
-                run_name=self.name,
-                nested=True,
-                description="sLAM",
-                log_system_metrics=True,
-            ):
-                mlflow.log_param("batch_size", self.batch_size)
-                mlflow.log_param("epochs", self.epochs)
-                mlflow.log_param("learning_rate", self.learning_rate)
-                mlflow.log_param("optimizer", optimizer.__class__.__name__)
-                mlflow.log_param("mixed_precision", "float32")
-                mlflow.log_param("dataset_name", self.download)
-                mlflow.log_param("dataset_size", self.num_rows)
+        # Train the model (inside MLflow run if use_mlflow=True)
+        self.history = model.fit(
+            train_dataset, callbacks=callbacks, **fit_params
+        )
 
-                self.history = model.fit(
-                    train_dataset, callbacks=callbacks, **fit_params
-                )
-        else:
-            self.history = model.fit(
-                train_dataset, callbacks=callbacks, **fit_params
-            )
+        if self.use_mlflow:
+            mlflow.end_run()
 
         history_metrics = self.history.history
         val_loss = history_metrics.get("val_loss", [])
@@ -959,6 +927,43 @@ class slam_builder:
                 mlflow.log_metric("train_accuracy", last_train_accuracy)
 
         return model
+
+    def setup_mlflow(self, callbacks=[]):
+        import mlflow
+        from mlflow.tensorflow import autolog
+        from mlflow.tensorflow.callback import MlflowCallback
+
+        mlflow.set_tracking_uri(uri=f"{self.mlflow_url}:{self.mlflow_port}")
+        autolog(
+            log_models=True,
+            log_input_examples=True,
+            log_model_signatures=True,
+            log_datasets=True,
+            silent=False,
+        )
+
+        # Add MLflow-specific callbacks
+        metrics_callback = MLFlowMetricsCallback()
+        instability_callback = NumericalStabilityCallback()
+
+        callbacks.append(MlflowCallback())
+        callbacks.append(metrics_callback)
+        callbacks.append(instability_callback)
+
+        # Start MLflow run and log parameters
+        mlflow.start_run(
+            run_name=self.name,
+            nested=True,
+            description="sLAM",
+            log_system_metrics=True,
+        )
+        mlflow.log_param("batch_size", self.batch_size)
+        mlflow.log_param("epochs", self.epochs)
+        mlflow.log_param("learning_rate", self.learning_rate)
+        mlflow.log_param("optimizer", optimizer.__class__.__name__)
+        mlflow.log_param("mixed_precision", "float32")
+        mlflow.log_param("dataset_name", self.download)
+        mlflow.log_param("dataset_size", self.num_rows)
 
     def save(self, model):
         """save
