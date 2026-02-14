@@ -1,0 +1,85 @@
+name: Test sLAM Model Generation
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  test-model-creation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-dev
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry config virtualenvs.create false
+        poetry install --no-interaction --no-ansi
+        
+    - name: Download NLTK data
+      run: |
+        python -c "import nltk; nltk.download('punkt_tab')"
+        
+    - name: Run make-slam.py with minimal settings
+      run: |
+        python sLAM/make-slam.py \
+          --num_datasets 10 \
+          --epochs 1 \
+          --context_size 16 \
+          --d_model 64 \
+          -n test-model \
+          -p "This is a test" \
+          -v
+          
+    - name: Verify model file exists
+      run: |
+        if [ ! -f "test-model.keras" ]; then
+          echo "ERROR: Model file test-model.keras was not created!"
+          exit 1
+        fi
+        echo "✓ Model file test-model.keras exists"
+        ls -lh test-model.keras
+        
+    - name: Verify tokenizer file exists
+      run: |
+        if [ ! -f "test-model.pkl" ]; then
+          echo "ERROR: Tokenizer file test-model.pkl was not created!"
+          exit 1
+        fi
+        echo "✓ Tokenizer file test-model.pkl exists"
+        ls -lh test-model.pkl
+        
+    - name: Test model generation
+      run: |
+        python sLAM/generate.py \
+          -n test-model \
+          -p "This is a test"
+          
+    - name: Upload model artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-model-files
+        path: |
+          test-model.keras
+          test-model.pkl
+          *.png
+        retention-days: 7

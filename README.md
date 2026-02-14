@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, decoder-only, generative small LAnguage Model that can be built using personal computing.
+Demonstration code to create a GPT-2-style, generative small LAnguage Model that can be built using personal computing.
 
 This is not for production. You can use this code to learn about generative language models, preprocessing, training, and model hyperparameters.
 
@@ -61,7 +61,7 @@ The code uses *cs_news* (the default) or *wikitext-2-v1* from Hugging Face as tr
 - *d_model (256)*: Dimensionality of embeddings and internal representations
 - *n_heads (4)*: Number of parallel attention heads
 - *n_layers (4)*: Number of transformer blocks stacked together
-- *d_ff (1024)*: Hidden layer size in the feed-forward networks
+- *d_ff (1024)*: Hidden layer size in the transformer blocks
 
 ### Build a model
 
@@ -71,7 +71,7 @@ Download and clean training data from *cs_news*, tokenize it into large chunks, 
 python3 sLAM/make-slam.py --num_datasets 1000 -v --epochs 3 -p "This is a test"
 ```
 
-The command creates a Keras model (~1M input tokens) and a saved (serialized) tokenizer with the same name, and histograms of chunk lengths and token input numbers. for example:
+The command creates a Keras model using ~1M input tokens and a saved (serialized) tokenizer with the same name, and histograms of chunk lengths and token input numbers. for example:
 
 ```sh
 -rw-r--r--   332M Apr  1 05:09 04-01-2025-05-09-04.keras
@@ -97,16 +97,15 @@ Very little input is needed to get decent syntax but the semantics are off. As y
 
 *This is a test of paris ap — french president emmanuel macron is condemning the rally in charlottesville today to neonazis skinheads and ku klux klan members and the white nationalists were met with hundreds of counterprotesters.*
 
+*This is a test of now playing gives you a party to your family and friends who shared with facebook on facebook now playing what would you do with the explosion now playing what might mean for us now playing family.*
+
 ## Architecture and Components
 
-Here's a detailed explanation of the key components and how they work together. The model is a *decoder-only transformer* - a type of neural network architecture that can understand and generate sequential text. Unlike encoder-decoder models used for translation, this architecture focuses purely on text generation by predicting the next token in a sequence.
+Here's a detailed explanation of the key components and how they work together. The model is a type of neural network architecture that can understand and generate sequential text. Unlike encoder-decoder models used for translation, this architecture focuses purely on text generation by predicting the next token in a sequence.
 
 ### Token and Positional Embeddings
 
-An embedding is a __numerical vector representation__ of a discrete item (like a token or position). The embeddings are initialized with random values within a small range, then __trained__. During training via backpropagation, the model adjusts these embedding vectors to represent tokens and positions in ways that help predict the next token accurately. The information comes from learning patterns in the training data.
-An embedding is a __tensor__ (a numerical array), and in this code specifically, each embedding is a 1D tensor (vector).
-
-The sLAM code uses __3D tensors__. When data is batched for training, each batch contains multiple sequences (in language modeling a __sequence__ refers to an ordered series of tokens):
+An embedding is a __numerical vector representation__ or __tensor__ of a discrete item like a token or position. The embeddings are initialized with random values within a small range, then __trained__. During training via backpropagation, the model adjusts these embedding vectors to represent tokens and positions in ways that help predict the next token. In this code specifically, each embedding is a 1D tensor (vector) but the sLAM code also uses __3D tensors__. When data is batched for training, each batch contains multiple sequences (in language modeling a __sequence__ refers to an ordered series of tokens):
 
 - Shape: `(batch_size, context_size, d_model)` = `(batch_size, 32, 256)` by default
 
@@ -114,13 +113,13 @@ The sLAM code uses __3D tensors__. When data is batched for training, each batch
   - Dimension 2: sequence length (32 tokens)
   - Dimension 3: embedding dimensions (256-dimensional vectors)
 
-These 3D tensors flow through the entire model.
+There are 2 kinds of embeddings:
 
 *Token Embeddings*: Convert each word token into a dense vector representation (e.g., 256-dimensions). These embeddings learn to capture semantic meaning - similar words end up with similar vector representations.
 
 *Positional Embeddings*: Transformers process all tokens simultaneously and need explicit position information. Positional embeddings encode where each token appears in the sequence, allowing the model to understand word order and syntax.
 
-Token and positional embeddings are created using __Keras Embedding layers__, which are lookup tables that map indices to learned vectors.
+Token and positional embeddings are created using __Keras Embedding layers__, which are lookup tables that map indices to vectors.
 
 In the `TokenAndPositionEmbedding` class in the code:
 
@@ -142,7 +141,7 @@ This creates another lookup table with 32 rows (one for each position in the seq
 
 ```python
 self.pos_emb = layers.Embedding(
-    input_dim=context_size,    # 32 positions
+    input_dim=context_size,    # 32 tokens or positions
     output_dim=d_model,        # 256 dimensions
     name="position_embeddings"
 )
@@ -156,7 +155,7 @@ position_embeddings = self.pos_emb(positions)    # Get position vectors
 return token_embeddings + position_embeddings    # Add them together
 ```
 
-Both embedding layers have __learnable weights__ that are trained during model training through backpropagation.
+Both embedding layers are the __learnable weights__ that are trained during model training through backpropagation.
 
 ### Multi-Head Attention Mechanism
 
@@ -176,7 +175,7 @@ Q, K, and V are __computed from the input embeddings__ using learnable __weight 
 
 ### Model architecture
 
-The sLAM model architecture is a decoder-only transformer. Input token IDs are converted to token embeddings (256-dimensional vectors initialized randomly and learned during training), combined with positional embeddings of the same dimension, and passed through a dropout layer for data regularization. Then 4 transformer blocks are stacked, each containing: (1) a multi-head attention layer with 4 heads and causal masking that computes relevance-weighted combinations of tokens, (2) a residual connection adding the attention output back to its input, (3) layer normalization, (4) a feed-forward network with two dense layers (first expands to 1024 dimensions with GELU activation, second contracts back to 256 dimensions linearly), (5) dropout, and (6) another residual connection plus layer normalization. Finally, a dense layer projects the output to the vocabulary size (50,000) to produce logits for predicting the next token. Data flows through as 3D tensors of shape (batch_size, sequence_length, embedding_dimension), and all weights are learned through backpropagation during training.
+Input tokens are converted to token embeddings vectors (initialized randomly and adjusted during training), combined with positional embeddings, and passed through a dropout layer for data regularization. Then 4 transformer blocks are stacked, each containing: (1) a multi-head attention layer with 4 heads and causal masking that computes relevance-weighted combinations of tokens, (2) a residual connection adding the attention output back to its input, (3) layer normalization, (4) a feed-forward network with two dense layers (first expands to `d_ff` - 1024 dimensions by default - with GELU activation, second contracts back to `d_model` - 256 dimensions by default - linearly), (5) dropout, and (6) another residual connection plus layer normalization. Finally, a dense layer projects the output to the vocabulary size (default: 50,000) to produce logits for predicting the next token. Data flows through as 3D tensors of shape (batch_size, sequence_length, embedding_dimension), and all weights are learned through backpropagation during training.
 
 So the complete flow is:
 
@@ -273,7 +272,7 @@ These additions create "shortcuts" or "skip connections" that allow gradients to
 
 #### Data PreparationQQ
 
-1. *Text Cleaning*: Filters high-quality text from datasets (cc_news or wikitext)
+1. *Text Cleaning*: Filters high-quality text from datasets (*cc_news* or *wikitext*)
 2. *Tokenization*: Converts text to integer token IDs using Keras TextVectorization
 3. *Sequence Creation*: Sliding window approach creates input/target pairs for next token prediction, for example:
    - Input: `[token1, token2, token3, token4]`
@@ -281,10 +280,29 @@ These additions create "shortcuts" or "skip connections" that allow gradients to
 
 #### Model Training
 
+The embeddings are the actual learnable weights that get adjusted during training. An embedding layer is created initially:
+
+```python
+layers.Embedding(input_dim=50000, output_dim=256)
+```
+
+This creates a weight matrix of shape (50,000, 256), i.e. 50,000 rows (one per token) × 256 columns (the embedding dimension) = 12,800,000 individual float values. These 12.8M floats are the learnable parameters.
+
+##### During training
+
+- These 256 floats for each token start as random values
+- Backpropagation adjusts each individual float based on the loss gradient
+- Over time, tokens that appear in similar contexts end up with similar embedding vectors (similar patterns of 256 floats)
+
+For example:
+
+- Token "cat" might initially be: [0.02, -0.15, 0.08, ..., 0.12]
+- Token "dog" might initially be: [-0.11, 0.09, -0.03, ..., 0.18]
+- After training, if they appear in similar contexts, their 256 floats adjust to become more similar
+
 - *Loss Function*: Sparse Categorical Crossentropy (predicts next token from vocabulary)
 - *Optimization*: Adam optimizer with polynomial learning rate decay
 - *Mixed Precision*: Uses float16 for faster training while maintaining float32 for stability
-- *Regularization*: Dropout (10% by default) prevents overfitting
 
 #### Training Monitoring
 
@@ -306,51 +324,53 @@ During generation, the model:
 5. *Updates* context window by sliding tokens left and adding the new token
 6. *Repeats* until desired length or end token is reached
 
-### Model Scale Comparison
+### Model Size Comparisons
 
-This sLAM models I've made are significantly smaller than production models like GPT-3 in most respects:
+This sLAM models I've made are much smaller than production models like GPT* in most respects:
 
 *Arbitrary Parameter Count:*
 
-- sLAM: ~1-5 million parameters (depending on *vocab_size* and *d_model* settings)
-- GPT-2 small: 117 million parameters
-- GPT-3: 175 billion parameters
+- sLAM: ~1-5M parameters (depending on *vocab_size* and *d_model* settings)
+- GPT-2 small: 117M parameters
+- GPT-3: 175B parameters
 
 *Model Dimensions:*
 
-- sLAM: 256 embedding dimensions, 4 layers, 4 attention heads
-- GPT-3: 12,288 embedding dimensions, 96 layers, 96 attention heads
-- GPT-2 small: 768 embedding dimensions, 12 layers, 12 attention heads
+- sLAM: 256 embedding dimensions, 4 transformer blocks, 4 attention heads
+- GPT-2 small: 768 embedding dimensions, 12 transformer blocks, 12 attention heads
+- GPT-3: 12,288 embedding dimensions, 96 transformer blocks, 96 attention heads
 
 *Context Window:*
 
-- sLAM: 32 tokens (very limited memory)
-- GPT-3: 2,048 tokens (64x larger context)
-- Modern models: up to 1M+ tokens
+- sLAM: 32 tokens
+- GPT-2: 1024 tokens
+- GPT-3: 2,048 tokens
 
 *Training Data:*
 
 - sLAM: Thousands of text samples (megabytes)
-- GPT-3: ~45TB of internet text data
+- GPT-2: 40GB of text data
+- GPT-3: 570GB of text data
 
 *Compute Requirements:*
 
 - sLAM: Trainable on consumer hardware (few GB RAM, optional GPU)
+- GPT-2: 8 TPUs v2 (comparable to 32-64 NVIDIA V100s)
 - GPT-3: Required thousands of high-end GPUs and months of training
 
 ### Library and package versions
 
-One of the challenges in writing and running Deep Learning code is how many components there are, and how quickly new versions replace old versions. To get all your component versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or PyTorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
+One of the challenges in writing and running TensorFlow code is how many components there are, and how quickly new versions replace old versions. To get all your component versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or PyTorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
 
 RTX 5000 + CUDA 11.8 + Tensorflow 2.17 + Python 3.8
 
 Then all the other Python dependencies (e.g. pandas, numpy) will follow from the Python version.
 
-*Getting these versions aligned is critical*, because if the versions are out of alignment you may get errors of various kinds that do not reference versions and are difficult to debug, like out-of-memory or data shape errors.
+*Getting these versions aligned is critical*, because if the versions are out of alignment you create executable code but get errors of various kinds that do not reference versions and are difficult to debug, like out-of-memory or data shape errors.
 
 #### Using Tensorflow from a container
 
-Containers may be available that package all the right versions, e.g. of CUDA, Python, and Tensorflow. In this example we're computing at Texas Advanced Computing Center and downloading a Tensorflow container from NVIDIA:
+Containers may be available that package all the right versions, e.g. of CUDA, Python, and Tensorflow. In this example we're computing at the Texas Advanced Computing Center and downloading a Tensorflow container from NVIDIA:
 
 ```sh
 srun -N 1 -n 10 -p rtx-dev -t 60:00 --pty bash
