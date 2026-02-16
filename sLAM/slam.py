@@ -1339,7 +1339,7 @@ class SmartCheckpointCallback(tf.keras.callbacks.Callback):
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
         if self.verbose:
-            print(f"SmartCheckpointCallback initialized:")
+            print("SmartCheckpointCallback initialized:")
             print(f"  - Save frequency: every {save_checkpoint_freq} epochs")
             print(f"  - Max checkpoints to keep: {max_checkpoints_to_keep}")
             print(
