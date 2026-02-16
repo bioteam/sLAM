@@ -12,19 +12,18 @@ import pickle
 import re
 import os
 import nltk
-from tensorflow.keras import layers  # type: ignore
-from tensorflow.keras import Model  # type: ignore
-from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
-from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
-from tensorflow.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
-from tensorflow.keras.losses import SparseCategoricalCrossentropy  # type: ignore
-from tensorflow.keras.optimizers.legacy import Adam  # type: ignore
-from tensorflow.keras.optimizers import SGD  # type: ignore
-from tensorflow.keras.callbacks import Callback  # type: ignore
-from tensorflow.keras.mixed_precision import set_global_policy  # type: ignore
-from tensorflow.keras.utils import register_keras_serializable  # type: ignore
-from tensorflow.keras.models import load_model  # type: ignore
-from tensorflow.keras.backend import get_value  # type: ignore
+from tf.keras import layers  # type: ignore
+from tf.keras import Model  # type: ignore
+from tf.keras.optimizers.schedules import PolynomialDecay  # type: ignore
+from tf.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
+from tf.keras.losses import SparseCategoricalCrossentropy  # type: ignore
+from tf.keras.optimizers.legacy import Adam  # type: ignore
+from tf.keras.optimizers import SGD  # type: ignore
+from tf.keras.callbacks import Callback  # type: ignore
+from tf.keras.mixed_precision import set_global_policy  # type: ignore
+from tf.keras.utils import register_keras_serializable  # type: ignore
+from tf.keras.models import load_model  # type: ignore
+from tf.keras.backend import get_value  # type: ignore
 from sklearn.model_selection import train_test_split
 from typing import Any
 
