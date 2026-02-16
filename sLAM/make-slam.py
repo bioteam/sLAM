@@ -59,11 +59,6 @@ parser.add_argument(
     help="Minimum length of cc_news chunk to use for training",
     default=50,
 )
-parser.add_argument(
-    "--use_mlflow",
-    help="Use MLFlow",
-    action="store_true",
-)
 parser.add_argument("-p", "--prompt", help="Prompt", required=True)
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose")
 args = parser.parse_args()
@@ -76,7 +71,6 @@ builder = slam_builder(
     context_size=args.context_size,
     d_model=args.d_model,
     temperature=args.temperature,
-    use_mlflow=args.use_mlflow,
     download=args.download,
 )
 if args.download == "wikitext-2-v1":
@@ -94,9 +88,6 @@ builder.create_tokenizer()
 
 builder.adapt(chunks)
 
-if args.use_mlflow:
-    builder.start_mlflow_server()
-
 train_dataset, val_dataset = builder.prepare_datasets(chunks)
 
 model = builder.create_gpt2_model()
@@ -110,6 +101,3 @@ if args.verbose:
 
 result = builder.generate_text(args.prompt, model)
 print(f"Result: {result}")
-
-if args.use_mlflow:
-    builder.stop_mlflow_server()

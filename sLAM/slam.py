@@ -12,12 +12,9 @@ import time
 import pickle
 import re
 import os
-import subprocess
-import signal
 import nltk
 from tensorflow.keras import layers  # type: ignore
 from tensorflow.keras import Model  # type: ignore
-from tensorflow.keras.optimizers import Adam  # type: ignore
 from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignore
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
 from tensorflow.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
@@ -100,9 +97,9 @@ class slam_builder:
         learning_rate: float = 5e-5,
         temperature: float = 0,
         stride: int = 4,
-        use_mlflow: bool = False,
         download: str = None,  # type: ignore
         num_rows: int = 0,
+        optimizer: str = "adam",
     ):
         """__init__
 
@@ -120,7 +117,7 @@ class slam_builder:
             batch_size -- Number of samples per training batch (default: 4)
             learning_rate --
             temperature -- degree of randomness in generation (default: 0.7)
-            use_mflow -- use MLFlow (default: False)
+            optimizer -- optimizer to use (default: "adam")
         """
         self.verbose = verbose
         self.name = name
@@ -136,19 +133,14 @@ class slam_builder:
         self.learning_rate = learning_rate
         self.temperature = temperature
         self.stride = stride
-        self.use_mlflow = use_mlflow
         self.num_rows = num_rows
         self.download = download
+        self.optimizer = optimizer
 
         if not self.name:
             self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
 
         self.token_ids = list()
-
-        """Set up the MLFlow server"""
-        self.mlflow_pid = None
-        self.mlflow_port = 9999
-        self.mlflow_url = "http://127.0.0.1"
 
         """ Set memory growth to avoid OOM issues """
         gpus = tf.config.list_physical_devices("GPU")
@@ -287,63 +279,64 @@ class slam_builder:
 
         return x
 
-    # Create the custom GPT-2 small model
     def create_gpt2_model(
         self,
     ):
         """create_gpt2_model
 
-        Arguments: none
+        Create a GPT-2 style untrainied language model with token and positional embeddings, multiple transformer blocks, and an output projection layer.
 
-        Returns:
-            Untrained tf.Keras.model
+         Arguments: none
 
-        The model has several types of layers:
+         Returns:
+             Untrained tf.Keras.model
 
-        - Input layer (input_ids)
-        - Token embedding layer
-        - Position embedding layer
-        - Addition layer (to combine token and position embeddings)
-        - Dropout layer (a certain percentage of the combined embedding values will be randomly set to zero, helping the model generalize better)
-        - Multiple transformer blocks (the number is determined by self.n_layers)
-        - Output dense layer (logits)
+         The model has several types of layers:
 
-        All of these layers are trainable by default in TensorFlow/Keras. The specific number of transformer blocks depends
-        on the value of self.n_layers. The transformer blocks themselves would contain multiple layers each (typically attention layers,
-        normalization layers, and feedforward networks), so the total layer count would be:
+         - Input layer (input_ids)
+         - Token embedding layer
+         - Position embedding layer
+         - Addition layer (to combine token and position embeddings)
+         - Dropout layer (a certain percentage of the combined embedding values will be randomly set to zero, helping the model generalize better)
+         - Multiple transformer blocks (the number is determined by self.n_layers)
+         - Output dense layer (logits)
 
-        - 5 base layers (input, embeddings, add, dropout, output
-        - Plus self.n_layers * (number of layers in each transformer block)
+         All of these layers are trainable by default in TensorFlow/Keras. The specific number of transformer blocks depends
+         on the value of self.n_layers. The transformer blocks themselves would contain multiple layers each (typically attention layers,
+         normalization layers, and feedforward networks), so the total layer count would be:
 
-        This function creates a small GPT-2 style language model with the following parameters:
+         - 5 base layers (input, embeddings, add, dropout, output
+         - Plus self.n_layers * (number of layers in each transformer block)
 
-        The vocab_size parameter defines the total number of unique tokens
-        that your language model can recognize and generate.
-        Using our example model with d_model=256:
+         This function creates a small GPT-2 style language model with the following parameters:
 
-        Vocab Size	Embedding Parameters	Output Layer Parameters	Total Added Parameters
-        5,000	    1.28M	                1.28M	                2.56M
-        10,000	    2.56M	                2.56M	                5.12M
-        30,000	    7.68M	                7.68M	                15.36M
-        50,000	    12.8M	                12.8M	                25.6M
+         The vocab_size parameter defines the total number of unique tokens
+         that your language model can recognize and generate.
+         Using our example model with d_model=256:
 
-        The context_size parameter (also called "sequence length" or "context window")
-        defines the maximum number of tokens that the model can process or generate at once.
-        It represents the "memory" of the model –how much previous text the model can consider
-        when generating the next token.
+         Vocab Size	Embedding Parameters	Output Layer Parameters	Total Added Parameters
+         5,000	    1.28M	                1.28M	                2.56M
+         10,000	    2.56M	                2.56M	                5.12M
+         30,000	    7.68M	                7.68M	                15.36M
+         50,000	    12.8M	                12.8M	                25.6M
 
-        The d_model parameter represents the dimensionality of the model's embedding space and is one
-        of the most important hyperparameters in transformer-based architectures.
+         The context_size parameter (also called "sequence length" or "context window")
+         defines the maximum number of tokens that the model can process or generate at once.
+         It represents the "memory" of the model –how much previous text the model can consider
+         when generating the next token.
 
-        Specifically, d_model determines:
+         The d_model parameter represents the dimensionality of the model's embedding space and is one
+         of the most important hyperparameters in transformer-based architectures.
 
-        - The dimensionality of the token embeddings - how many features are used to represent each token
-        - The dimensionality of the positional embeddings - how position information is encoded
-        - The width of the attention layers - the size of the keys, queries, and values in the attention mechanism
-        - The dimensionality throughout most of the model's internal representations
+         Specifically, d_model determines:
 
-        In this code d_model is set to 256 by default (vector with 256 floats), which is small
-        compared to larger models like GPT-2 (which uses 768 in its smallest version).
+         - The dimensionality of the token embeddings - how many features are used to represent each token
+         - The dimensionality of the positional embeddings - how position information is encoded
+         - The width of the attention layers - the size of the keys, queries, and values in the attention mechanism
+         - The dimensionality throughout most of the model's internal representations
+
+         In this code d_model is set to 256 by default (vector with 256 floats), which is small
+         compared to larger models like GPT-2 (which uses 768 in its smallest version).
         """
         # Input tokens and combined positional embeddings
         input_ids = layers.Input(
@@ -412,6 +405,24 @@ class slam_builder:
         return model
 
     # Create a simple tokenizer
+    def configure_learning(self, decay_steps: int):
+        """configure_learning
+
+        Create and return a learning rate schedule based on training parameters.
+
+        Arguments:
+            decay_steps -- Number of steps over which to decay the learning rate
+
+        Returns:
+            PolynomialDecay learning rate schedule
+        """
+        lr_schedule = PolynomialDecay(
+            initial_learning_rate=self.learning_rate,
+            end_learning_rate=self.learning_rate / 10,
+            decay_steps=decay_steps,
+        )
+        return lr_schedule
+
     def create_tokenizer(self):
         """create_tokenizer
 
@@ -680,7 +691,7 @@ class slam_builder:
     ):
         """train_model
 
-        Set up optimizer, checkpoints, compile(), and run model.fit()
+        Set up checkpoints, compile(), and run model.fit()
 
         Arguments:
             train_dataset -- tf.data.Dataset.from_tensor_slices
@@ -753,9 +764,7 @@ class slam_builder:
         In the context of training GPT-2 style language models, "samples" has a specific meaning
         that differs from some other machine learning contexts:
 
-        What Constitutes a Sample in LLM Training
-
-        For GPT-2 style models:
+        What Constitutes a Sample in LLM Training for GPT-2 style models:
 
         A sample is typically a sequence of tokens of a specific length (e.g., 512 or 1024 tokens)
         These sequences are often extracted from a larger corpus of text
@@ -826,21 +835,25 @@ class slam_builder:
 
         decay_steps = self.epochs * train_dataset_size // self.batch_size
 
-        """Learning rate schedule"""
-        lr_schedule = PolynomialDecay(
-            initial_learning_rate=self.learning_rate,
-            end_learning_rate=self.learning_rate / 10,
-            decay_steps=decay_steps,
-        )
+        # Create learning rate schedule
+        lr_schedule = self.configure_learning(decay_steps)
 
-        optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
+        """Set up optimizer"""
+        if self.optimizer == "adam":
+            optimizer = tf.keras.optimizers.legacy.Adam(
+                learning_rate=lr_schedule, epsilon=1e-8
+            )
+        elif self.optimizer == "sgd":
+            optimizer = tf.keras.optimizers.legacy.SGD(
+                learning_rate=self.learning_rate
+            )
+        else:
+            raise ValueError(f"Unsupported optimizer: {self.optimizer}")
 
         """        
-        Logits in neural networks: When your model makes a prediction for the next token in a sequence, 
+        Logits: when the model makes a prediction for the next token in a sequence, 
         it outputs a vector of real numbers (one for each token in your vocabulary). 
-        These raw output values are called "logits".
-
-        Relationship to probabilities: Logits are not probabilities - they can be any real number 
+        These raw output values are called "logits". Logits are not probabilities - they can be any real number 
         (positive, negative, or zero). To convert logits to probabilities, you typically apply a softmax function.
         """
         model.compile(
@@ -857,7 +870,7 @@ class slam_builder:
             verbose=1,
         )
 
-        # Smart checkpoint callback that manages disk space
+        """Smart checkpoint callback that keeps disk space in check"""
         checkpoint_callback = SmartCheckpointCallback(
             checkpoint_dir=checkpoint_dir,
             save_checkpoint_freq=save_checkpoint_freq,
@@ -881,16 +894,9 @@ class slam_builder:
             "verbose": 1,
         }
 
-        if self.use_mlflow:
-            self.setup_mlflow(callbacks)
-
-        # Train the model (inside MLflow run if use_mlflow=True)
         self.history = model.fit(
             train_dataset, callbacks=callbacks, **fit_params
         )
-
-        if self.use_mlflow:
-            mlflow.end_run()
 
         history_metrics = self.history.history
         val_loss = history_metrics.get("val_loss", [])
@@ -914,56 +920,12 @@ class slam_builder:
                 print(f"val_loss: {last_val_loss}")
             if last_val_accuracy is not None:
                 print(f"val_accuracy: {last_val_accuracy}")
-
-        if self.use_mlflow:
-            if last_val_loss is not None:
-                mlflow.log_metric("loss", last_val_loss)
-            if last_val_accuracy is not None:
-                mlflow.log_metric("accuracy", last_val_accuracy)
-            # You can also log training metrics
             if last_train_loss is not None:
-                mlflow.log_metric("train_loss", last_train_loss)
+                print(f"train_loss: {last_train_loss}")
             if last_train_accuracy is not None:
-                mlflow.log_metric("train_accuracy", last_train_accuracy)
+                print(f"train_accuracy: {last_train_accuracy}")
 
         return model
-
-    def setup_mlflow(self, callbacks=[]):
-        import mlflow
-        from mlflow.tensorflow import autolog
-        from mlflow.tensorflow.callback import MlflowCallback
-
-        mlflow.set_tracking_uri(uri=f"{self.mlflow_url}:{self.mlflow_port}")
-        autolog(
-            log_models=True,
-            log_input_examples=True,
-            log_model_signatures=True,
-            log_datasets=True,
-            silent=False,
-        )
-
-        # Add MLflow-specific callbacks
-        metrics_callback = MLFlowMetricsCallback()
-        instability_callback = NumericalStabilityCallback()
-
-        callbacks.append(MlflowCallback())
-        callbacks.append(metrics_callback)
-        callbacks.append(instability_callback)
-
-        # Start MLflow run and log parameters
-        mlflow.start_run(
-            run_name=self.name,
-            nested=True,
-            description="sLAM",
-            log_system_metrics=True,
-        )
-        mlflow.log_param("batch_size", self.batch_size)
-        mlflow.log_param("epochs", self.epochs)
-        mlflow.log_param("learning_rate", self.learning_rate)
-        mlflow.log_param("optimizer", optimizer.__class__.__name__)
-        mlflow.log_param("mixed_precision", "float32")
-        mlflow.log_param("dataset_name", self.download)
-        mlflow.log_param("dataset_size", self.num_rows)
 
     def save(self, model):
         """save
@@ -1288,70 +1250,6 @@ class slam_builder:
             )
         return model
 
-    def start_mlflow_server(self):
-        """start_mlflow_server
-
-        Start MLFlow server programmatically on the specified port.
-
-        This method attempts to start an MLFlow tracking server on the port specified
-        by self.mlflow_port. It first checks if the port is already in use to avoid
-        conflicts with existing MLFlow instances.
-
-        Returns:
-            None: If the port is already in use or after attempting to start the server.
-
-        Notes:
-            - Uses socket binding to check port availability before starting
-            - If port is in use, assumes MLFlow server is already running
-            - Prints status message if verbose mode is enabled
-        """
-        # Check if the port is already in use
-        import socket
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        in_use = False
-        try:
-            sock.bind(("127.0.0.1", self.mlflow_port))
-        except socket.error:
-            in_use = True
-        finally:
-            sock.close()
-
-        if in_use:
-            if self.verbose:
-                print(
-                    f"Port {self.mlflow_port} is already in use. MLFlow server might already be running."
-                )
-            return None
-
-        # Start the MLFlow server as a subprocess
-        cmd = f"mlflow server --host 127.0.0.1 --port {self.mlflow_port}"
-        try:
-            self.mlflow_process = subprocess.Popen(
-                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            # Give the server a moment to start up
-            time.sleep(2)
-            if self.verbose:
-                print(f"MLFlow URL is http://127.0.0.1:{self.mlflow_port}")
-        except Exception as e:
-            print(f"Error starting MLFlow: {e}")
-
-    def stop_mlflow_server(self):
-        if self.mlflow_process.poll() is None:  # If process is still running
-            if os.name == "nt":  # Windows
-                subprocess.call(
-                    [
-                        "taskkill",
-                        "/F",
-                        "/T",
-                        "/PID",
-                        str(self.mlflow_process.pid),
-                    ]
-                )
-            else:  # Unix/Linux/MacOS
-                os.killpg(os.getpgid(self.mlflow_process.pid), signal.SIGTERM)
-
 
 class ValidationPrintCallback(tf.keras.callbacks.Callback):
     """ValidationPrintCallback
@@ -1389,53 +1287,6 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
         print(f"\nValidation results {epoch}:")
         for name, value in zip(metric_names, val_results):
             print(f"val_{name}: {value:.4f}")
-
-
-class MLFlowMetricsCallback(tf.keras.callbacks.Callback):
-    """MLFlowMetricsCallback
-
-    A custom Keras callback for logging training metrics to MLflow during model training.
-
-    This callback automatically logs all metrics from the training logs to MLflow at the
-    end of each epoch. Additionally, it calculates and logs perplexity when validation
-    loss and accuracy are available.
-
-    Attributes:
-        Inherits all attributes from tf.keras.callbacks.Callback
-
-    Example:
-        >>> callback = MLFlowMetricsCallback()
-        >>> model.fit(x_train, y_train, callbacks=[callback])
-    """
-
-    def on_epoch_end(self, epoch, logs=None):
-        """
-        on_epoch_end
-
-        Called at the end of each training epoch to log metrics to MLflow.
-
-        Logs all available metrics from the epoch's training logs to MLflow.
-        Additionally calculates and logs perplexity based on validation loss
-        when both validation loss and validation accuracy are present.
-
-        Args:
-            epoch (int): The current epoch number (0-indexed)
-            logs (dict, optional): Dictionary containing the metric values for this epoch.
-                                  Keys are metric names (e.g., 'loss', 'accuracy',
-                                  'val_loss', 'val_accuracy'). Defaults to None.
-
-        Returns:
-            None
-        """
-        logs = logs or {}
-        for metric_name, metric_value in logs.items():
-            mlflow.log_metric(metric_name, metric_value, step=epoch)
-
-            # Log custom metrics
-            if "val_loss" in logs and "val_accuracy" in logs:
-                # Calculate perplexity (a common LM metric)
-                perplexity = np.exp(logs["val_loss"])
-                mlflow.log_metric("perplexity", perplexity, step=epoch)
 
 
 class SmartCheckpointCallback(tf.keras.callbacks.Callback):
@@ -1611,136 +1462,3 @@ class SmartCheckpointCallback(tf.keras.callbacks.Callback):
             best_checkpoint = max(self.best_checkpoints, key=lambda x: x[1])
 
         return best_checkpoint[2]  # Return filepath
-
-
-class NumericalStabilityCallback(tf.keras.callbacks.Callback):
-    """NumericalStabilityCallback
-
-    A Keras callback for monitoring numerical stability during neural network training.
-
-    This callback tracks various metrics related to numerical stability including:
-    - Loss variance across batches within an epoch
-    - Detection of NaN or infinite loss values
-    - Weight statistics for each layer (mean, variance, maximum absolute value)
-    - Detection of extreme weight values (>1000)
-
-    These metrics are logged to MLflow for experiment tracking and debugging
-    numerical instability issues during training.
-
-    Attributes:
-        log_frequency (int): How often (in epochs) to log detailed metrics. Default is 1.
-        batch_losses (list): Stores loss values for each batch in current epoch.
-        gradient_norms (list): Placeholder for gradient norm tracking (not currently implemented).
-        has_nan_or_inf (bool): Flag indicating if NaN/Inf was detected in current epoch.
-
-    Example:
-        ```python
-        stability_callback = NumericalStabilityCallback(log_frequency=5)
-        model.fit(X_train, y_train, callbacks=[stability_callback])
-        ```
-    """
-
-    def __init__(self, log_frequency=1):
-        """__init__
-
-        Initialize the NumericalStabilityCallback.
-
-        Args:
-            log_frequency (int): Frequency (in epochs) at which to log detailed metrics.
-                                Default is 1 (log every epoch).
-        """
-        super().__init__()
-        self.log_frequency = log_frequency
-        self.batch_losses = []
-        self.gradient_norms = []
-        self.has_nan_or_inf = False
-
-    def on_batch_end(self, batch, logs=None):
-        """on_batch_end
-
-        Called at the end of each training batch to collect loss values.
-
-        Stores the batch loss for later variance calculation and checks for
-        NaN or infinite loss values that indicate numerical instability.
-
-        Args:
-            batch (int): Index of the current batch within the current epoch.
-            logs (dict, optional): Dictionary containing the loss and metric values
-                                  for this batch. Expected to contain 'loss' key.
-        """
-        # Store batch losses to compute variance later
-        if logs and "loss" in logs:
-            self.batch_losses.append(logs["loss"])
-
-            # Check for NaN/Inf
-            if np.isnan(logs["loss"]) or np.isinf(logs["loss"]):
-                self.has_nan_or_inf = True
-
-    def on_epoch_end(self, epoch, model, logs=None):
-        """on_epoch_end
-
-        Called at the end of each epoch to compute and log stability metrics.
-
-        Logs the following metrics to MLflow (if epoch matches log_frequency):
-        - Loss variance across all batches in the epoch
-        - Whether NaN/Inf values were detected
-        - Weight statistics (mean, variance, max) for each layer
-        - Whether extreme weight values (>1000) exist in each layer
-
-        Args:
-            epoch (int): Index of the current epoch.
-            model (tf.keras.Model): The model being trained.
-            logs (dict, optional): Dictionary containing the loss and metric values
-                                  averaged over the epoch.
-        """
-        if epoch % self.log_frequency == 0:
-            # Log gradient norms for a few layers (requires custom training loop or grad tape)
-            # For simplicity, we're logging other metrics here
-            # Log loss variance across batches
-            if len(self.batch_losses) > 1:
-                loss_variance = np.var(self.batch_losses)
-                mlflow.log_metric(
-                    f"epoch_{epoch}_loss_variance", loss_variance
-                )
-            # Log if NaN/Inf was detected
-            mlflow.log_metric(
-                f"epoch_{epoch}_has_nan_inf", int(self.has_nan_or_inf)
-            )
-
-            # Reset for next epoch
-            self.batch_losses = []
-            self.has_nan_or_inf = False
-
-            # Log weight statistics for each layer
-            for i, layer in enumerate(self.model.layers):
-                if len(layer.weights) > 0:  # Only for layers with weights
-                    # Get weights
-                    weights = layer.get_weights()[0]
-
-                    # Log weight statistics
-                    mlflow.log_metric(
-                        f"epoch_{epoch}_layer_{i}_weight_mean",
-                        np.mean(weights),
-                    )
-                    mlflow.log_metric(
-                        f"epoch_{epoch}_layer_{i}_weight_var", np.var(weights)
-                    )
-                    mlflow.log_metric(
-                        f"epoch_{epoch}_layer_{i}_weight_max",
-                        np.max(np.abs(weights)),
-                    )
-
-                    # Check for extreme values
-                    has_extreme = np.any(np.abs(weights) > 1000)
-                    mlflow.log_metric(
-                        f"epoch_{epoch}_layer_{i}_has_extreme_weights",
-                        int(has_extreme),
-                    )
-
-                    # For specific layers, log activation stats if needed
-                    if (
-                        hasattr(layer, "activation")
-                        and layer.activation is not None
-                    ):
-                        # This would require custom tracking during forward pass
-                        pass

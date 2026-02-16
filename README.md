@@ -2,7 +2,7 @@
 
 Demonstration code to create a GPT-2-style, generative small LAnguage Model that can be built using personal computing.
 
-This is not for production. You can use this code to learn about generative language models, preprocessing, training, and model hyperparameters.
+This is not for production. You can use this code to learn about Tensorflow, generative language models, preprocessing, training, and model hyperparameters.
 
 ## Installation
 
@@ -27,7 +27,7 @@ Complete the installation:
 ```sh
 > python3 sLAM/make-slam.py -h
 usage: make-slam.py [-h] [-t TEXT_PERCENTAGE] [--context_size CONTEXT_SIZE] [-n NAME] [--temperature TEMPERATURE] [--epochs EPOCHS] [--d_model D_MODEL] [-d {wikitext-2-v1,cc_news}] [--num_datasets NUM_DATASETS]
-                    [--min_chunk_len MIN_CHUNK_LEN] [--use_mlflow] -p PROMPT [-v]
+                    [--min_chunk_len MIN_CHUNK_LEN] -p PROMPT [-v]
 
 options:
   -h, --help            show this help message and exit
@@ -46,7 +46,6 @@ options:
                         Number of datasets to download from cc_news
   --min_chunk_len MIN_CHUNK_LEN
                         Minimum length of cc_news chunk to use for training
-  --use_mlflow          Use MLFlow
   -p PROMPT, --prompt PROMPT
                         Prompt
   -v, --verbose         Verbose
@@ -56,12 +55,13 @@ The code uses *cs_news* (the default) or *wikitext-2-v1* from Hugging Face as tr
 
 ### Default Parameters
 
-- *vocab_size (50,000)*: Number of unique tokens the model can understand/generate
-- *context_size (32)*: Maximum sequence length the model can process at once (the "memory window")  
-- *d_model (256)*: Dimensionality of embeddings and internal representations
-- *n_heads (4)*: Number of parallel attention heads
-- *n_layers (4)*: Number of transformer blocks stacked together
-- *d_ff (1024)*: Hidden layer size in the transformer blocks
+- `epochs` (3): Number of complete passes through the entire training dataset
+- `vocab_size (50,000)`: Number of unique tokens the model can understand/generate
+- `context_size (32)`: Maximum sequence length the model can process at once (the "memory window")  
+- `d_model (256)`: Dimensionality of embeddings and internal representations
+- `n_heads (4)`: Number of parallel attention heads
+- `n_layers (4)`: Number of transformer blocks stacked together
+- `d_ff (1024)`: Hidden layer size in the transformer blocks
 
 ### Build a model
 
@@ -115,7 +115,7 @@ An embedding is a __numerical vector representation__ or __tensor__ of a discret
 
 There are 2 kinds of embeddings:
 
-*Token Embeddings*: Convert each word token into a dense vector representation (e.g., 256-dimensions). These embeddings learn to capture semantic meaning - similar words end up with similar vector representations.
+*Token Embeddings*: Convert each word token into a dense vector representation (e.g., 256 dimensions). These embeddings learn to capture semantic meaning - similar words end up with similar vector representations.
 
 *Positional Embeddings*: Transformers process all tokens simultaneously and need explicit position information. Positional embeddings encode where each token appears in the sequence, allowing the model to understand word order and syntax.
 
@@ -207,7 +207,7 @@ Dropout is used in three places: before the blocks, within each block's attentio
 
 #### Transformer Blocks
 
-The model has 4 blocks, by default, specified by the *n_layers* parameter. Each transformer block contains the following components, in order:
+The model has 4 blocks, by default, specified by the `n_layers` parameter. Each transformer block contains the following components, in order:
 
 - __Multi-head attention layer__ with causal masking
 - __Residual connection__ adding attention output back to input
@@ -280,6 +280,28 @@ These additions create "shortcuts" or "skip connections" that allow gradients to
 
 #### Model Training
 
+Within a single epoch:
+
+1. __Batching__: Training data is divided into batches (default batch_size=4 in slam.py)
+2. __Forward Pass__: For each batch, the model makes predictions
+3. __Loss Calculation__: Compare predictions to target tokens using `SparseCategoricalCrossentropy`
+4. __Backward Pass (Backpropagation)__: Compute gradients
+5. __Parameter Update__: Adam optimizer updates all weights
+6. __Repeat__: Steps 2-5 repeat for each batch until all training data is processed
+7. __Validation__: After all batches, model is evaluated on validation data
+8. __Epoch Complete__: One full pass is done
+
+Example in slam.py:
+
+If you have 10,000 training samples and batch_size=4:
+
+- __Steps per epoch__ = 10,000 ÷ 4 = 2,500 steps
+- Each step processes 4 samples
+- After 2,500 steps, one epoch is complete
+- With epochs=3, training runs 3 complete passes = 7,500 total steps
+
+##### Embeddings
+
 The embeddings are the actual learnable weights that get adjusted during training. An embedding layer is created initially:
 
 ```python
@@ -298,20 +320,54 @@ For example:
 
 - Token "cat" might initially be: [0.02, -0.15, 0.08, ..., 0.12]
 - Token "dog" might initially be: [-0.11, 0.09, -0.03, ..., 0.18]
-- After training, if they appear in similar contexts, their 256 floats adjust to become more similar
 
-- *Loss Function*: Sparse Categorical Crossentropy (predicts next token from vocabulary)
-- *Optimization*: Adam optimizer with polynomial learning rate decay
-- *Mixed Precision*: Uses float16 for faster training while maintaining float32 for stability
+After training, if they appear in similar contexts, their 256 floats adjust to become more similar.
+
+### The loss function
+
+The loss function measures __how wrong the model's predictions are__ during training and serves as the signal that guides the learning process. In training flow:
+
+- Forward pass: model outputs logits for next token prediction
+- Loss calculation: `SparseCategoricalCrossentropy` compares logits to actual next token ID
+- Backward pass: gradients flow back through the network
+- Weight update: optimizer adjusts weights to reduce future loss
+- Early stopping: monitors val_loss and stops training when it stops improving
+- Checkpoints: saves models when val_loss is lowest
+
+In essence, the loss function is the __feedback mechanism__ that tells the model how to learn.
+
+### Optimization
+
+Adam (Adaptive Moment Estimation) is an optimization algorithm used to update the model's weights during training based on the gradients computed from the loss function.
+
+```python
+self.optimizer = tf.keras.optimizers.Adam(
+    learning_rate=lr_schedule, epsilon=1e-8
+)
+```
+
+How it fits into training:
+
+1. Forward pass: Model predicts next token
+2. Loss calculated via `SparseCategoricalCrossentropy`
+3. __Adam computes gradients__ using backpropagation
+4. __Adam updates weights__ using adaptive per-parameter learning rates
+5. Process repeats for each batch
+6. Early stopping monitors validation loss and stops when no improvement
+
+Adam is the default choice for training modern neural networks including language models like sLAM because it combines the benefits of momentum-based methods with adaptive learning rates.
 
 #### Training Monitoring
 
-The code includes several custom callbacks for monitoring training stability:
+Checkpoints serve as __intermediate saves of the model's learned weights__ during training, enabling recovery, model selection, and efficient disk management. A __Callback__ is a
+mechanism that hooks into the training process at specific events (epoch end, batch end, etc.). In slam.py, callbacks are custom classes like `ValidationPrintCallback` and `SmartCheckpointCallback` that inherit from `tf.keras.callbacks.Callback`. They execute custom logic during different stages of training.
+For example, The `SmartCheckpointCallback` manages the creation and lifecycle of checkpoint files, saving them at intervals and keeping only the N best checkpoints based on validation loss.
 
-- *Numerical Stability Callback*: Detects NaN/infinite values and extreme weights
-- *Validation Callback*: Tracks performance on held-out data
-- *MLFlow Integration*: Logs metrics, parameters, and model artifacts for experiment tracking
-- *Checkpointing*: Saves model state during training to prevent loss of progress
+The custom callbacks for monitoring training stability:
+
+- `ValidationPrintCallback`: Tracks performance on held-out data
+- `SmartCheckpointCallback`: Saves model state during training
+_ `EarlyStopping`: when training stops due to no improvement, the model weights are restored to the best checkpoint
 
 ### Text Generation Process
 

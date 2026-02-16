@@ -92,6 +92,6 @@ echo ""
 
 # Cleanup test files
 echo "9. Cleaning up test artifacts..."
-rm -f test-model.keras test-model.pkl *.png
+rm -fr test-model.keras test-model.pkl *.png checkpoints/
 echo "   ✓ Test files cleaned up"
 echo ""
