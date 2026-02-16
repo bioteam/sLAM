@@ -1,7 +1,4 @@
 import os
-
-# Enable asynchronous memory allocation
-os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 import tensorflow as tf
 import numpy as np
 import glob
@@ -10,7 +7,6 @@ import sys
 import time
 import pickle
 import re
-import os
 import nltk
 from tf.keras import layers  # type: ignore
 from tf.keras import Model  # type: ignore
@@ -28,6 +24,8 @@ from sklearn.model_selection import train_test_split
 from typing import Any
 
 set_global_policy("mixed_float16")
+# Enable asynchronous memory allocation
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 
 
 @register_keras_serializable(package="sLAM")
@@ -167,6 +165,7 @@ class slam_builder:
                  self-attention and feed-forward layers
 
         Components of each transformer block:
+
         - Multi-head attention layer with causal masking
         - Residual connection adding attention output back to input
         - Layer normalization
@@ -174,7 +173,6 @@ class slam_builder:
         - Dropout layer for regularization (applied after feed-forward)
         - Second residual connection adding feed-forward output back to input
         - Layer normalization
-
 
         Purpose of the transformer_block method:
 
@@ -202,7 +200,6 @@ class slam_builder:
         3. Concatenation: The outputs from all heads are concatenated together
 
         4. Final Projection: The concatenated output goes through a final linear projection
-
 
         Attention is a mechanism that allows neural networks to focus selectively on relevant parts of input data when performing a task.
         It mimics human cognitive attention by dynamically weighting the importance of different elements in a sequence or set of features.
@@ -1120,7 +1117,7 @@ class slam_builder:
         'Getting In', 'A Typical Day', 'Stage Time', 'Share Us', 'Share Us', 'Installation', 'Configure Apache', 'Accessing Trac', 'Figure A',
         'Congratulations', 'Also see', 'Also see', 'Setup', 'Figure A', 'Language selection', 'EULA', ...]
 
-        Args:
+        Argsuments:
             datasets (datasets.arrow_dataset.Dataset): List of dictionaries containing text data, where each
             dictionary has a "text" key with the content to be processed.
 
@@ -1157,7 +1154,7 @@ class slam_builder:
         sentences with unknown tokens and URLs, fixing tokenization artifacts, and
         optionally sampling a percentage of the cleaned sentences.
 
-        Args:
+        Arguments:
             raw_texts: A dataset dictionary containing a "train" split with text entries.
                     Each entry should have a "text" field containing the raw text.
             percentage: Float or int between 0-100 indicating what percentage of cleaned
@@ -1265,7 +1262,7 @@ class ValidationPrintCallback(Callback):
     Attributes:
         validation_data: The validation dataset to evaluate the model on.
 
-    Args:
+    Argsuments:
         validation_data: A tf.data.Dataset or tuple of (inputs, targets)
                         containing the validation data.
     """
