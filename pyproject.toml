@@ -23,6 +23,9 @@ nltk = "^3.6"
 matplotlib = "^3.5"
 scikit-learn = "^1.0"
 
+[tool.pyright]
+typeCheckingMode = "basic"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

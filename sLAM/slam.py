@@ -3,7 +3,6 @@ import os
 # Enable asynchronous memory allocation
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 import tensorflow as tf
-
 import numpy as np
 import glob
 import random
@@ -19,12 +18,20 @@ from tensorflow.keras.optimizers.schedules import PolynomialDecay  # type: ignor
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore  # noqa: F401
 from tensorflow.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
 from tensorflow.keras.losses import SparseCategoricalCrossentropy  # type: ignore
+from tensorflow.keras.optimizers.legacy import Adam  # type: ignore
+from tensorflow.keras.optimizers import SGD  # type: ignore
+from tensorflow.keras.callbacks import Callback  # type: ignore
+from tensorflow.keras.mixed_precision import set_global_policy  # type: ignore
+from tensorflow.keras.utils import register_keras_serializable  # type: ignore
+from tensorflow.keras.models import load_model  # type: ignore
+from tensorflow.keras.backend import get_value  # type: ignore
 from sklearn.model_selection import train_test_split
+from typing import Any
 
-tf.keras.mixed_precision.set_global_policy("mixed_float16")
+set_global_policy("mixed_float16")
 
 
-@tf.keras.utils.register_keras_serializable(package="sLAM")
+@register_keras_serializable(package="sLAM")
 class TokenAndPositionEmbedding(layers.Layer):
     """
     TokenAndPositionEmbedding
@@ -55,7 +62,7 @@ class TokenAndPositionEmbedding(layers.Layer):
         )
 
     def call(self, inputs):
-        seq_len = tf.shape(inputs)[1]
+        seq_len = tf.shape(inputs)[1]  # type: ignore
         positions = tf.range(start=0, limit=seq_len, delta=1)
         position_embeddings = self.pos_emb(positions)
         token_embeddings = self.token_emb(inputs)
@@ -139,8 +146,8 @@ class slam_builder:
 
         if not self.name:
             self.name = time.strftime("%m-%d-%Y-%H-%M-%S", time.localtime())
-
-        self.token_ids = list()
+        self.tokenizer: Any = None
+        self.token_ids: Any = list()
 
         """ Set memory growth to avoid OOM issues """
         gpus = tf.config.list_physical_devices("GPU")
@@ -840,13 +847,9 @@ class slam_builder:
 
         """Set up optimizer"""
         if self.optimizer == "adam":
-            optimizer = tf.keras.optimizers.legacy.Adam(
-                learning_rate=lr_schedule, epsilon=1e-8
-            )
+            optimizer = Adam(learning_rate=lr_schedule, epsilon=1e-8)
         elif self.optimizer == "sgd":
-            optimizer = tf.keras.optimizers.legacy.SGD(
-                learning_rate=self.learning_rate
-            )
+            optimizer = SGD(learning_rate=self.learning_rate)
         else:
             raise ValueError(f"Unsupported optimizer: {self.optimizer}")
 
@@ -969,7 +972,7 @@ class slam_builder:
         if isinstance(value, tf.Variable):
             value = value.read_value()
         if tf.is_tensor(value):
-            value = tf.keras.backend.get_value(value)
+            value = get_value(value)
         if isinstance(value, (np.ndarray, np.generic)):
             try:
                 value = np.asarray(value).item()
@@ -1243,7 +1246,7 @@ class slam_builder:
         if not os.path.exists(f"{self.name}.keras"):
             sys.exit(f"Model file not found: {self.name}.keras")
         try:
-            model = tf.keras.models.load_model(f"{self.name}.keras")
+            model = load_model(f"{self.name}.keras")
         except Exception as e:
             sys.exit(
                 f"Model file could not be loaded with the current architecture. Error: {e}"
@@ -1251,7 +1254,7 @@ class slam_builder:
         return model
 
 
-class ValidationPrintCallback(tf.keras.callbacks.Callback):
+class ValidationPrintCallback(Callback):
     """ValidationPrintCallback
 
     A custom Keras callback that prints validation metrics at the end of each epoch.
@@ -1289,7 +1292,7 @@ class ValidationPrintCallback(tf.keras.callbacks.Callback):
             print(f"val_{name}: {value:.4f}")
 
 
-class SmartCheckpointCallback(tf.keras.callbacks.Callback):
+class SmartCheckpointCallback(Callback):
     """SmartCheckpointCallback
 
     A space-efficient checkpoint callback that manages disk usage by:
