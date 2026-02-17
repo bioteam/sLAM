@@ -348,7 +348,13 @@ The Adam optimizer stores and uses data from previous steps for optimization usi
 - Adaptive Learning Rates (Second Moment Estimate): Adam also tracks an exponential moving average of the squared gradients, known as the "second moment" vector (denoted as <i>v</i>). This information is used to adapt the learning rate for each individual parameter of the model, allowing for larger steps for infrequent parameters and smaller steps for frequent ones.
 - Bias Correction: The moving averages <i>m</i> and <i>v</i> are initialized with zeros and are therefore biased towards zero, especially during the initial iterations of training. Adam applies a bias correction mechanism to these estimates to ensure they are more accurate, particularly in the early stages of training.
 
-<i>m</i> and <i>v</i> are updated at every training step (usually a mini-batch iteration) and persist throughout the entire training process, allowing the optimizer to intelligently navigate the complex loss landscape. The memory requirement for this is relatively low as it only involves storing two moving average vectors the same size as the model's parameters.
+<i>m</i> and <i>v</i> are updated at every training step and persist throughout the entire training process, allowing the optimizer to intelligently navigate the complex loss landscape. The memory requirement for this is relatively low as it only involves storing two moving average vectors that are the same size as the model's parameters.
+
+#### Gradients
+
+The gradients inform the training code on how to adjust the internal parameters. Gradients in a neural network are vectors of partial derivatives that measure how much the network's loss (error) changes with respect to its weights and biases. They represent the slope of the cost function, pointing in the direction of the steepest ascent. By computing gradients via backpropagation, optimizers update parameters in the opposite direction (gradient descent) to minimize error and improve model performance.
+
+The gradients indicate the direction and rate at which parameters should be adjusted to reduce error. They point "uphill" towards higher loss, which is why algorithms move in the negative gradient direction to go "downhill" (minimize loss). A large gradient indicates a steep slope (requiring significant updates), while a small gradient indicates a flat region. The backpropagation algorithm calculates the gradients for every parameter by traversing the network backward from the output layer to the input layer.
 
 How it fits into training:
 
