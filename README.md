@@ -291,14 +291,10 @@ Within a single epoch:
 7. __Validation__: After all batches, model is evaluated on validation data
 8. __Epoch Complete__: One full pass is done
 
-Example in slam.py:
+For example in slam.py if you have 10,000 training samples and batch_size=4:
 
-If you have 10,000 training samples and batch_size=4:
-
-- __Steps per epoch__ = 10,000 ÷ 4 = 2,500 steps
-- Each step processes 4 samples
-- After 2,500 steps, one epoch is complete
-- With epochs=3, training runs 3 complete passes = 7,500 total steps
+- Steps per epoch = 10,000 ÷ 4 = 2,500 steps
+- With epochs=3, training runs 3 complete passes = 7,500 steps
 
 ##### Embeddings
 
@@ -345,6 +341,14 @@ self.optimizer = tf.keras.optimizers.Adam(
     learning_rate=lr_schedule, epsilon=1e-8
 )
 ```
+
+The Adam optimizer stores and uses data from previous steps for optimization using exponentially decaying moving averages, not by storing all raw results from every past epoch or step. This memory is maintained across epochs as part of the optimizer's internal state. Here is how Adam uses past data:
+
+- Momentum (First Moment Estimate): Adam maintains a running exponential moving average of the past gradients, often referred to as the "first moment" vector (denoted as <i>m</i>). This helps to smooth out the optimization path and maintain velocity in consistent directions, leading to faster convergence and reduced oscillation.
+- Adaptive Learning Rates (Second Moment Estimate): Adam also tracks an exponential moving average of the squared gradients, known as the "second moment" vector (denoted as v). This information is used to adapt the learning rate for each individual parameter of the model, allowing for larger steps for infrequent parameters and smaller steps for frequent ones.
+- Bias Correction: The moving averages (m and v) are initialized with zeros and are therefore biased towards zero, especially during the initial iterations of training. Adam applies a bias correction mechanism to these estimates to ensure they are more accurate, particularly in the early stages of training.
+
+m and v are updated at every training step (usually a mini-batch iteration) and persist throughout the entire training process, allowing the optimizer to intelligently navigate the complex loss landscape. The memory requirement for this is relatively low as it only involves storing two moving average vectors the same size as the model's parameters. 
 
 How it fits into training:
 

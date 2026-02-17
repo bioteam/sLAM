@@ -43,7 +43,7 @@ echo ""
 
 # Run make-slam.py with minimal settings
 echo "5. Running make-slam.py with minimal test settings..."
-echo "   (Using: 10 datasets, 1 epoch, context_size=16, d_model=64)"
+echo "   Using: 10 datasets, 1 epoch, context_size=16, d_model=64"
 python sLAM/make-slam.py \
     --num_datasets 10 \
     --epochs 1 \
