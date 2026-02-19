@@ -93,7 +93,7 @@ This is a test of now playing this case means he may be caught trying to arrest 
 
 ### Playing with epochs and input
 
-Very little input is needed to get decent syntax but the semantics are off. As you increase the number of epochs and the number of input tokens the output approaches semantically correct English, for example, after 100 epochs with 10K *cc_news* datasets:
+Very little text input is needed to get decent syntax but the semantics are off. As you increase the number of epochs and the number of input tokens the output approaches semantically correct English, for example, after 100 epochs with 10K *cc_news* datasets:
 
 *This is a test of paris ap — french president emmanuel macron is condemning the rally in charlottesville today to neonazis skinheads and ku klux klan members and the white nationalists were met with hundreds of counterprotesters.*
 
@@ -105,7 +105,7 @@ Here's a detailed explanation of the key components and how they work together. 
 
 ### Token and Positional Embeddings
 
-An embedding is a __numerical vector representation__ or __tensor__ of a discrete item like a token or position. The embeddings are initialized with random values within a small range, then __trained__. During training via backpropagation, the model adjusts these embedding vectors to represent tokens and positions in ways that help predict the next token. In this code specifically, each embedding is a 1D tensor (vector) but the sLAM code also uses __3D tensors__. When data is batched for training, each batch contains multiple sequences (in language modeling a __sequence__ refers to an ordered series of tokens):
+An embedding is a __numerical vector representation__ or __tensor__ of a discrete item like a token string or token position. The embeddings are initialized with random values within a small range, then __trained__. During training the model adjusts these embeddings by small increments, then tests these new embeddings to see if they can predict the next token better. In this code specifically, each embedding is a 1D tensor (vector) but the sLAM code also uses __3D tensors__. When data is batched for training, each batch contains multiple sequences (in language modeling a __sequence__ refers to an ordered series of tokens):
 
 - Shape: `(batch_size, context_size, d_model)` = `(batch_size, 32, 256)` by default
 
@@ -115,9 +115,9 @@ An embedding is a __numerical vector representation__ or __tensor__ of a discret
 
 There are 2 kinds of embeddings:
 
-*Token Embeddings*: Convert each word token into a dense vector representation (e.g., 256 dimensions). These embeddings learn to capture semantic meaning - similar words end up with similar vector representations.
+*Token Embeddings*: Convert each word token into a dense vector representation (e.g., 256 dimensions). These embeddings are adjusted - "learn" - in training to capture semantic meaning - similar words end up with similar vector representations.
 
-*Positional Embeddings*: Transformers process all tokens simultaneously and need explicit position information. Positional embeddings encode where each token appears in the sequence, allowing the model to understand word order and syntax.
+*Positional Embeddings*: Transformers process all tokens simultaneously and need explicit position information. Positional embeddings encode where each token appears in the sequence, enabling the model to predict correct word order and syntax.
 
 Token and positional embeddings are created using __Keras Embedding layers__, which are lookup tables that map indices to vectors.
 
@@ -159,7 +159,7 @@ Both embedding layers are the __learnable weights__ that are trained during mode
 
 ### Multi-Head Attention Mechanism
 
-The core innovation of transformers is *self-attention*, which trains each token to "attend to" or relate to other relevant tokens in the sequence.
+A core innovation of transformers is *self-attention*, which trains each token to "attend to" or relate to other relevant tokens in the sequence.
 
 Attention is a computational mechanism that transforms token embeddings into Query (Q), Key (K), and Value (V) vectors, then computes similarity scores between Q and K to generate weights via softmax, and finally produces a weighted sum of the V vectors. Multi-head attention performs this computation multiple times in parallel with different learned transformations. Position influences attention in two ways: positional embeddings are incorporated into the token representations that become Q, K, and V, and causal masking constrains which positions each token can attend to—preventing attention to future tokens and allowing only self and past token attention.
 
@@ -172,6 +172,46 @@ The formula computes a weighted sum of the Values (V). The softmax of (QK^T/√d
 During the Q-K comparison, some token pairs produce high dot product scores and others produce low scores. Tokens with high scores are given more weight in the final output. What counts as "relevant" (what produces high scores) is learned by the model during training, the Q, K, and V weight matrices are adjusted so that the model learns to assign high scores to tokens that help predict the next token accurately.
 
 Q, K, and V are __computed from the input embeddings__ using learnable __weight matrices__. So the actual weights that get adjusted during backpropagation are those transformation matrices (often called projection matrices). For each input embedding, the model multiplies it by these weight matrices to produce Q, K, and V vectors. During training, backpropagation adjusts these weight matrices so that the resulting Q, K, V vectors encode relationships that help the model predict the next token accurately.
+
+##### Attention and predicting the next word
+
+In a decoder-only model like this the model attends to its own previous tokens to predict the next one. This is called causal self-attention — each token can only see tokens before it, not future ones. If the input is the sequence of tokens *A | cat | sat | on | the* then we want to predict the word after "the". Each token attends to all preceding tokens (including itself), something like this:
+
+1.Each token gets Q, K, V vectors
+
+`"A"   → Q₁, K₁, V₁`
+`"cat" → Q₂, K₂, V₂`
+`"sat" → Q₃, K₃, V₃`
+`"on"  → Q₄, K₄, V₄`
+`"the" → Q₅, K₅, V₅   ← this is the query position`
+
+2.Score Q₅ against all previous keys
+
+`score("the" vs "A")   = Q₅ · K₁ = 0.4`
+`score("the" vs "cat") = Q₅ · K₂ = 2.1`
+`score("the" vs "sat") = Q₅ · K₃ = 0.8`
+`score("the" vs "on")  = Q₅ · K₄ = 1.1`
+`score("the" vs "the") = Q₅ · K₅ = 3.9  ← attends to itself + context`
+
+Future tokens are masked to -∞ before softmax, so they become 0.
+
+3.Softmax → attention weights
+
+`weights ≈ [0.02, 0.12, 0.05, 0.08, 0.73]`
+
+The model leans heavily on the current "the" (it's a determiner, so a noun likely follows) but also picks up signal from "cat" (a noun came after the first "the").
+
+4.Weighted sum → context vector → predict next token
+
+`context = 0.02·V₁ + 0.12·V₂ + 0.05·V₃ + 0.08·V₄ + 0.73·V₅`
+
+This context vector feeds into a linear layer + softmax over the vocabulary. The model outputs a probability distribution — ideally high probability on tokens like "mat", "floor", "rug", etc.
+
+What training does
+The correct next token ("mat") is known. The cross-entropy loss is computed, and backpropagation adjusts Wq, Wk, Wv so that over many examples:
+
+- "A" preceding a noun learns to attend to prior nouns for context
+- "sat on the __" learns to up-weight location/surface nouns
 
 ### Model architecture
 
@@ -282,7 +322,7 @@ These additions create "shortcuts" or "skip connections" that allow gradients to
 
 Within a single epoch:
 
-1. __Batching__: Training data is divided into batches (default batch_size=4 in slam.py)
+1. __Batching__: Training data is divided into batches (default batch_size=4 in `slam.py`)
 2. __Forward Pass__: For each batch, the model makes predictions
 3. __Loss Calculation__: Compare predictions to target tokens using `SparseCategoricalCrossentropy`
 4. __Backward Pass (Backpropagation)__: Compute gradients
@@ -291,7 +331,7 @@ Within a single epoch:
 7. __Validation__: After all batches, model is evaluated on validation data
 8. __Epoch Complete__: One full pass is done
 
-For example in slam.py if you have 10,000 training samples and batch_size=4:
+For example in `slam.py` if you have 10,000 training samples and batch_size=4:
 
 - Steps per epoch = 10,000 ÷ 4 = 2,500 steps
 - With epochs=3, training runs 3 complete passes = 7,500 steps
@@ -369,15 +409,14 @@ Adam is the default choice for training modern neural networks including languag
 
 #### Training Monitoring
 
-Checkpoints serve as __intermediate saves of the model's learned weights__ during training, enabling recovery, model selection, and efficient disk management. A __Callback__ is a
-mechanism that hooks into the training process at specific events (epoch end, batch end, etc.). In slam.py, callbacks are custom classes like `ValidationPrintCallback` and `SmartCheckpointCallback` that inherit from `tf.keras.callbacks.Callback`. They execute custom logic during different stages of training.
+Checkpoints serve as __intermediate saves of the model's learned weights__ during training, enabling recovery, model selection, and efficient disk management. A __Callback__ is a mechanism that hooks into the training process at specific events (epoch end, batch end, etc.). In `slam.py`, callbacks are custom classes like `ValidationPrintCallback` and `SmartCheckpointCallback` that inherit from `tf.keras.callbacks.Callback`. They execute custom logic during different stages of training.
 For example, The `SmartCheckpointCallback` manages the creation and lifecycle of checkpoint files, saving them at intervals and keeping only the N best checkpoints based on validation loss.
 
 The custom callbacks for monitoring training stability:
 
 - `ValidationPrintCallback`: Tracks performance on held-out data
 - `SmartCheckpointCallback`: Saves model state during training
-_ `EarlyStopping`: when training stops due to no improvement, the model weights are restored to the best checkpoint
+- `EarlyStopping`: when training stops due to no improvement, the model weights are restored to the best checkpoint
 
 ### Text Generation Process
 
@@ -426,7 +465,7 @@ This sLAM models I've made are much smaller than production models like GPT* in 
 
 ### Library and package versions
 
-One of the challenges in writing and running TensorFlow code is how many components there are, and how quickly new versions replace old versions. To get all your component versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or PyTorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
+One of the challenges in writing and running TensorFlow code is how many dependencies there are, and how quickly new versions replace old versions. To get all your versions aligned start with your computer, which may be a GPU. For example, if it's NVIDIA, what is the recommended version of CUDA? From that version find the recommended version of Tensorflow or PyTorch. Then for that package version what version of Python. An example set of versions, working with an older NVIDIA GPU:
 
 RTX 5000 + CUDA 11.8 + Tensorflow 2.17 + Python 3.8
 
