@@ -215,7 +215,7 @@ The correct next token ("mat") is known. The cross-entropy loss is computed, and
 
 ### Model architecture
 
-Input tokens are converted to token embeddings vectors (initialized randomly and adjusted during training), combined with positional embeddings, and passed through a dropout layer for data regularization. Then 4 transformer blocks are stacked, each containing: (1) a multi-head attention layer with 4 heads and causal masking that computes relevance-weighted combinations of tokens, (2) a residual connection adding the attention output back to its input, (3) layer normalization, (4) a feed-forward network with two dense layers (first expands to `d_ff` - 1024 dimensions by default - with GELU activation, second contracts back to `d_model` - 256 dimensions by default - linearly), (5) dropout, and (6) another residual connection plus layer normalization. Finally, a dense layer projects the output to the vocabulary size (default: 50,000) to produce logits for predicting the next token. Data flows through as 3D tensors of shape (batch_size, sequence_length, embedding_dimension), and all weights are learned through backpropagation during training.
+Input tokens are converted to token embeddings vectors (initialized randomly and adjusted during training), combined with positional embeddings, and passed through a dropout layer for data regularization. Then 4 transformer blocks are stacked, each containing: (1) a multi-head attention layer with 4 heads and causal masking that computes relevance-weighted combinations of tokens, (2) a residual connection adding the attention output back to its input, (3) layer normalization, (4) a feed-forward network (FFN) with two dense layers (first expands to `d_ff` - 1024 dimensions by default - with GELU activation, second contracts back to `d_model` - 256 dimensions by default - linearly), (5) dropout, and (6) another residual connection plus layer normalization. Finally, a dense layer projects the output to the vocabulary size (default: 50,000) to produce logits for predicting the next token. Data flows through as 3D tensors of shape (batch_size, sequence_length, embedding_dimension), and all weights are learned through backpropagation during training.
 
 So the complete flow is:
 
@@ -310,7 +310,9 @@ These additions create "shortcuts" or "skip connections" that allow gradients to
 
 ### Training Process
 
-#### Data PreparationQQ
+#### Data Preparation or preprocessing
+
+An unappreciated detail to a novice is that all input to a neural network, training or inference, is some form of matrix filled with numbers, integer or float.
 
 1. *Text Cleaning*: Filters high-quality text from datasets (*cc_news* or *wikitext*)
 2. *Tokenization*: Converts text to integer token IDs using Keras TextVectorization
@@ -407,6 +409,55 @@ How it fits into training:
 
 Adam is the default choice for training modern neural networks including language models like sLAM because it combines the benefits of momentum-based methods with adaptive learning rates.
 
+#### FFN weights
+
+The FFN in sLAM is two dense (fully connected) layers:
+
+```python
+layers.Dense(self.d_ff, activation="gelu")  # expand: 256 → 1024
+layers.Dense(self.d_model)                  # contract: 1024 → 256
+```
+
+This expands the representation to a larger dimension (1024), applies a non-linear activation (GELU), then contracts back down to the model dimension (256). This expansion-contraction gives the model extra capacity to transform the representation in ways attention alone can't.
+
+A rough intuition for the division of labor:
+
+- Attention — mixes information across tokens (which tokens relate to which)
+- FFN — transforms the representation of each token independently (no cross-token interaction)
+
+The FFN weights are also learned during training via backpropagation, just like the embedding and attention weight matrices. Both FFN weights and embeddings are weight matrices updated by backpropagation — but they work differently.
+
+Each embedding corresponds to a specific token, but the FFN weights are applied via matrix multiplication to every token's vector, they are not tied to specific tokens — the same weights are applied to every position
+A concrete way to see the difference:
+
+`Embedding:  token_id=42  →  look up row 42  →  [0.3, -0.1, 0.8, ...]`
+`FFN:        vector       →  multiply by W   →  new transformed vector`
+
+The deeper similarity is that both are just matrices of floats that get adjusted by Adam during training. In that sense all learned parameters in a neural network are matrices of numbers updated by gradient descent. The difference is in how they're used during the forward pass.
+
+### The Forward and Backward Pass
+
+A simplified view:
+
+- Forward:  embeddings → attention → ... → loss
+- Backward: loss → gradients → optimizer updates {Wq, Wk, Wv, FFN weights, embedding table}
+
+#### Backward pass for training/learning
+
+- The loss is computed (cross-entropy vs. the correct next token)
+- Gradients flow backward through the attention mechanism all the way back to the embeddings
+- The Adam optimizer then updates everything — both the embedding table values AND the Q, K, V weight matrices
+
+Attention doesn't modify the embedding table. Attention is the messenger that carries gradient signal back to the embeddings during backpropagation — it's the path through which the embeddings learn what they should represent. But the actual update to the embedding floats is done by the optimizer, not by attention itself.
+
+A concrete way to think about it: if "cat" and "mat" always appear in similar attention patterns, backpropagation will adjust their embedding vectors to be more similar — but attention didn't do that directly, it just created the context in which the loss signal could flow back and cause those updates.
+
+#### Forward pass for prediction
+
+- The embedding lookup produces vectors
+- Attention transforms those vectors into contextual representations (a weighted sum of Values)
+- The embeddings themselves are unchanged — attention just reads from them
+
 #### Training Monitoring
 
 Checkpoints serve as __intermediate saves of the model's learned weights__ during training, enabling recovery, model selection, and efficient disk management. A __Callback__ is a mechanism that hooks into the training process at specific events (epoch end, batch end, etc.). In `slam.py`, callbacks are custom classes like `ValidationPrintCallback` and `SmartCheckpointCallback` that inherit from `tf.keras.callbacks.Callback`. They execute custom logic during different stages of training.
@@ -417,6 +468,21 @@ The custom callbacks for monitoring training stability:
 - `ValidationPrintCallback`: Tracks performance on held-out data
 - `SmartCheckpointCallback`: Saves model state during training
 - `EarlyStopping`: when training stops due to no improvement, the model weights are restored to the best checkpoint
+
+### What are the "weights"?
+
+A useful intuition: attention decides where to look (dynamic), while the embeddings determine what that means (static, learned at training time). Both are essential — attention alone with random weights predicts nothing useful, and embeddings without attention can't model sequential dependencies.
+
+Embeddings are static lookup tables learned during training. They provide the initial representation of each token going into the transformer blocks. The token embedding matrix (50,000 × 256 = 12.8M parameters) encodes what each token "means" in isolation and the positional embeddings add sequence order information.
+
+The attention content (Q, K, V weight matrices) are also learned weights, but they compute dynamic, context-dependent transformations. The Q, K, V projection matrices transform the embeddings into vectors that can be compared against each other. The attention scores (softmax of QKᵀ/√d_k) determine which tokens' Values get weighted together. The final prediction comes from the dense output layer projecting the last hidden state → vocabulary logits. So the full chain is:
+
+  → Token Embedding (learned weights)
+  → Positional embeddings (learned weights)
+  → Attention (Q,K,V learned weight matrices)
+  → FFN (learned weight matrices)
+  → Output dense layer (learned weights)
+  → Logits over 50,000 tokens
 
 ### Text Generation Process
 
