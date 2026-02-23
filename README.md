@@ -1,6 +1,6 @@
 # sLAM
 
-Demonstration code to create a GPT-2-style, generative small LAnguage Model that can be built using personal computing.
+Demonstration code to create a [GPT-2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)-style, generative small LAnguage Model that can be built using personal computing.
 
 This is not for production. You can use this code to learn about Tensorflow, generative language models, preprocessing, training, and model hyperparameters.
 
@@ -56,12 +56,12 @@ The code uses *cs_news* (the default) or *wikitext-2-v1* from Hugging Face as tr
 ### Default Parameters
 
 - `epochs` (3): Number of complete passes through the entire training dataset
-- `vocab_size (50,000)`: Number of unique tokens the model can understand/generate
-- `context_size (32)`: Maximum sequence length the model can process at once (the "memory window")  
-- `d_model (256)`: Dimensionality of embeddings and internal representations
-- `n_heads (4)`: Number of parallel attention heads
-- `n_layers (4)`: Number of transformer blocks stacked together
-- `d_ff (1024)`: Hidden layer size in the transformer blocks
+- `vocab_size` (50,000): Number of unique tokens the model can understand/generate
+- `context_size` (32): Maximum sequence length the model can process at once (the "memory window")  
+- `d_model` (256): Dimensionality of embeddings and internal representations
+- `n_heads` (4): Number of parallel attention heads
+- `n_layers` (4): Number of transformer blocks stacked together
+- `d_ff` (1024): Hidden layer size in the transformer blocks
 
 ### Build a model
 
@@ -80,7 +80,7 @@ The command creates a Keras model using ~1M input tokens and a saved (serialized
 -rw-r--r--    19K Mar 31 16:05 token_number_distribution.png
 ```
 
-One epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above. However, more text than that needs to be used to generate syntactically and semantically correct English.
+1 epoch takes about ~1 hour on a Mac M1 laptop (32 GB RAM) with the command above. However, more text and more epochs need to be used to generate syntactically and semantically correct English.
 
 ### Generate using an existing model
 
@@ -125,7 +125,7 @@ In the `TokenAndPositionEmbedding` class in the code:
 
 __Token Embeddings:__
 
-This creates a lookup table with 50,000 rows (one for each token in the vocabulary), where each row is a 256-dimensional vector. When you look up a token ID, you get its corresponding embedding vector.
+This creates a lookup table with 50,000 rows (1 for each token in the vocabulary), where each row is a 256-dimensional vector. When you look up a token ID, you get its corresponding embedding vector.
 
 ```python
 self.token_emb = layers.Embedding(
@@ -137,7 +137,7 @@ self.token_emb = layers.Embedding(
 
 __Positional Embeddings:__
 
-This creates another lookup table with 32 rows (one for each position in the sequence), where each row is also a 256-dimensional vector. When you look up a position (0-31), you get its corresponding embedding.
+This creates another lookup table with 32 rows (1 for each position in the sequence), where each row is also a 256-dimensional vector. When you look up a position (0-31), you get its corresponding embedding.
 
 ```python
 self.pos_emb = layers.Embedding(
@@ -155,13 +155,18 @@ position_embeddings = self.pos_emb(positions)    # Get position vectors
 return token_embeddings + position_embeddings    # Add them together
 ```
 
-Both embedding layers are the __learnable weights__ that are trained during model training through backpropagation.
+Both embedding layers are the __learnable weights__ that are trained during model training through backpropagation. The 256 floats for each token start as random values and backpropagation adjusts each float based on the loss gradient. Over time, tokens that appear in similar contexts end up with similar embedding vectors. For example:
+
+- Token "cat" might initially be: [0.02, -0.15, 0.08, ..., 0.12]
+- Token "dog" might initially be: [-0.11, 0.09, -0.03, ..., 0.18]
+
+After training, if they appear in similar contexts, their 256 floats are adjusted by the optimizer to become more similar.
 
 ### Multi-Head Attention Mechanism
 
-A core innovation of transformers is *self-attention*, which trains each token to "attend to" or relate to other relevant tokens in the sequence.
+A core innovation of transformers ([Vaswani et al., 2017](https://arxiv.org/abs/1706.03762)) is *self-attention*, which trains each token to "attend to" or relate to other relevant tokens in the sequence.
 
-Attention is a computational mechanism that transforms token embeddings into Query (Q), Key (K), and Value (V) vectors, then computes similarity scores between Q and K to generate weights via softmax, and finally produces a weighted sum of the V vectors. Multi-head attention performs this computation multiple times in parallel with different learned transformations. Position influences attention in two ways: positional embeddings are incorporated into the token representations that become Q, K, and V, and causal masking constrains which positions each token can attend to—preventing attention to future tokens and allowing only self and past token attention.
+Attention is a computational mechanism that transforms token embeddings into Query (Q), Key (K), and Value (V) vectors, then computes similarity scores between Q and K to generate weights via softmax, and finally produces a weighted sum of the V vectors. Multi-head attention performs this computation multiple times in parallel with different learned transformations. Position influences attention in 2 ways: positional embeddings are incorporated into the token representations that become Q, K, and V, and causal masking constrains which positions each token can attend to—preventing attention to future tokens and allowing only self and past token attention.
 
 #### Attention computation
 
@@ -215,9 +220,9 @@ The correct next token ("mat") is known. The cross-entropy loss is computed, and
 
 ### Model architecture
 
-Input tokens are converted to token embeddings vectors (initialized randomly and adjusted during training), combined with positional embeddings, and passed through a dropout layer for data regularization. Then 4 transformer blocks are stacked, each containing: (1) a multi-head attention layer with 4 heads and causal masking that computes relevance-weighted combinations of tokens, (2) a residual connection adding the attention output back to its input, (3) layer normalization, (4) a feed-forward network (FFN) with two dense layers (first expands to `d_ff` - 1024 dimensions by default - with GELU activation, second contracts back to `d_model` - 256 dimensions by default - linearly), (5) dropout, and (6) another residual connection plus layer normalization. Finally, a dense layer projects the output to the vocabulary size (default: 50,000) to produce logits for predicting the next token. Data flows through as 3D tensors of shape (batch_size, sequence_length, embedding_dimension), and all weights are learned through backpropagation during training.
+Input tokens are converted to embeddings, combined with positional embeddings, and passed through a dropout layer. The data then flows through 4 stacked transformer blocks (detailed below), and a final dense layer projects the output to vocabulary size to produce logits for next-token prediction. Data flows through as 3D tensors of shape (batch_size, sequence_length, embedding_dimension), and all weights are learned through backpropagation during training.
 
-So the complete flow is:
+The complete flow is:
 
 ```javascript
 Input → Token+Position Embeddings → Dropout → [Transformer Block 1] → [Transformer Block 2] → [Transformer Block 3] → [Transformer Block 4] → Output Dense Layer → Logits
@@ -241,38 +246,42 @@ __Dense layer__ - projects the output to the vocabulary size to produce logits f
 
 #### Dropout layer
 
-Dropout is a __regularization technique__ that prevents overfitting. During training, it randomly sets a percentage of values (10% by default in sLAM) to zero. This forces the model to learn more robust features by not relying on any single activation value. It's like training with incomplete information—the model learns to work with different random subsets of neurons, which makes it generalize better to new data. During generation/inference, dropout is not applied.
+Dropout ([Srivastava et al., 2014](https://jmlr.org/papers/v15/srivastava14a.html)) is a __regularization technique__ that prevents overfitting. During training, it randomly sets a percentage of values (10% by default in sLAM) to zero. This forces the model to learn more robust features by not relying on any single activation value. It's like training with incomplete information—the model learns to work with different random subsets of neurons, which makes it generalize better to new data. During generation/inference, dropout is not applied.
 
-Dropout is used in three places: before the blocks, within each block's attention mechanism, and after each block's feed-forward network.
+For example, with 10% dropout applied to an 8-dimensional vector during training:
+
+`Before dropout: [0.5, 1.2, -0.3, 0.8, 0.1, -0.6, 0.9, 0.4]`
+`After dropout:  [0.5, 0.0, -0.3, 0.8, 0.1, -0.6, 0.0, 0.4]  ← ~10% randomly zeroed`
+
+Dropout is used in 3 places: before the blocks, within each block's attention mechanism, and after each block's feed-forward network.
 
 #### Transformer Blocks
 
 The model has 4 blocks, by default, specified by the `n_layers` parameter. Each transformer block contains the following components, in order:
 
 - __Multi-head attention layer__ with causal masking
-- __Residual connection__ adding attention output back to input
+- __Residual connection__ ([He et al., 2016](https://arxiv.org/abs/1512.03385)) adding attention output back to input
 - __Layer normalization__
-- __Feed-forward network__ with two dense layers:
-  - First dense layer with GELU activation: `layers.Dense(self.d_ff, activation="gelu")(x)`
+- __Feed-forward network__ with 2 dense layers:
+  - First dense layer with GELU ([Hendrycks & Gimpel, 2016](https://arxiv.org/abs/1606.08415)) activation: `layers.Dense(self.d_ff, activation="gelu")(x)`
   - Second dense layer with no activation (linear): `layers.Dense(self.d_model)(ff_output)`
 - __Dropout layer__ for regularization (10% by default, applied after feed-forward)
 - __Residual connection__ adding feed-forward output back to input
 - __Layer normalization__
 
-So the flow in each transformer block is:
-
-```javascript
-Input → Attention → Add (residual) → LayerNorm → Feed-forward → Add (residual) → LayerNorm → Output
-```
-
 ##### Layer Normalization
 
-Layer normalization normalizes the activations (output values) of a layer to have a mean of 0 and standard deviation of 1. This keeps the values from becoming too large or too small, which:
+Layer normalization ([Ba et al., 2016](https://arxiv.org/abs/1607.06450)) normalizes the activations (output values) of a layer to have a mean of 0 and standard deviation of 1. This keeps the values from becoming too large or too small, which:
 
 - Prevents training from becoming unstable
 - Allows for higher learning rates
 
-Layer normalization occurs in two places within each transformer block:
+For example, a 4-dimensional activation vector before and after layer normalization:
+
+`Before: [1.0,  3.0,  5.0,  7.0]   (mean=4.0, std=2.24)`
+`After:  [-1.34, -0.45, 0.45, 1.34] (mean≈0.0, std≈1.0)`
+
+Layer normalization occurs in 2 places within each transformer block:
 
 After the attention + residual connection:
 
@@ -294,23 +303,9 @@ This normalizes the output at the end of the block before it goes to the next bl
 
 It's different from batch normalization (which normalizes across the batch dimension)—layer normalization normalizes across the feature dimension for each individual sample, which is more suitable for transformers and sequence models.
 
-So the feed-forward network expands to `d_ff` dimensions (1024 by default) with GELU, then contracts back down to `d_model` dimensions (256 by default) without an activation function.
+## Training Process
 
-In the code, residual connections are implemented using `layers.Add()`, which literally adds the original input to the processed output:
-
-1. After the multi-head attention layer: `x = layers.Add()([x, attn_output])`
-
-   - This adds the attention output to the original input
-
-2. After the feed-forward network: `x = layers.Add()([x, ff_output])`
-
-   - This adds the feed-forward output back to the input it received
-
-These additions create "shortcuts" or "skip connections" that allow gradients to flow more effectively during backpropagation, which improves training stability and allows deeper networks to learn better.
-
-### Training Process
-
-#### Data Preparation or preprocessing
+### Data Preparation or preprocessing
 
 An unappreciated detail to a novice is that all input to a neural network, training or inference, is some form of matrix filled with numbers, integer or float.
 
@@ -320,7 +315,7 @@ An unappreciated detail to a novice is that all input to a neural network, train
    - Input: `[token1, token2, token3, token4]`
    - Target: `[token2, token3, token4, token5]`
 
-#### Model Training
+### Model Training
 
 Within a single epoch:
 
@@ -331,52 +326,33 @@ Within a single epoch:
 5. __Parameter Update__: Adam optimizer updates all weights
 6. __Repeat__: Steps 2-5 repeat for each batch until all training data is processed
 7. __Validation__: After all batches, model is evaluated on validation data
-8. __Epoch Complete__: One full pass is done
+8. __Epoch Complete__: 1 full pass is done
 
 For example in `slam.py` if you have 10,000 training samples and batch_size=4:
 
 - Steps per epoch = 10,000 ÷ 4 = 2,500 steps
 - With epochs=3, training runs 3 complete passes = 7,500 steps
 
-##### Embeddings
-
-The embeddings are the actual learnable weights that get adjusted during training. An embedding layer is created initially:
-
-```python
-layers.Embedding(input_dim=50000, output_dim=256)
-```
-
-This creates a weight matrix of shape (50,000, 256), i.e. 50,000 rows (one per token) × 256 columns (the embedding dimension) = 12,800,000 individual float values. These 12.8M floats are the learnable parameters.
-
-##### During training
-
-- These 256 floats for each token start as random values
-- Backpropagation adjusts each individual float based on the loss gradient
-- Over time, tokens that appear in similar contexts end up with similar embedding vectors (similar patterns of 256 floats)
-
-For example:
-
-- Token "cat" might initially be: [0.02, -0.15, 0.08, ..., 0.12]
-- Token "dog" might initially be: [-0.11, 0.09, -0.03, ..., 0.18]
-
-After training, if they appear in similar contexts, their 256 floats adjust to become more similar.
+During the __forward pass__, embeddings are looked up and attention transforms them into contextual representations — the embeddings themselves are unchanged, attention just reads from them. During the __backward pass__, gradients flow through the attention mechanism back to the embeddings and the optimizer updates all weights — embeddings, Q/K/V matrices, FFN weights. Attention doesn't modify the embedding table directly; it carries the gradient signal through which the embeddings learn what they should represent.
 
 ### The loss function
 
-The loss function measures __how wrong the model's predictions are__ during training and serves as the signal that guides the learning process. In training flow:
+The loss function measures __how wrong the model's predictions are__ and serves as the signal that guides learning. `SparseCategoricalCrossentropy` compares the model's predicted logits to the actual next token ID. In essence, the loss function is the __feedback mechanism__ that tells the model how to learn.
 
-- Forward pass: model outputs logits for next token prediction
-- Loss calculation: `SparseCategoricalCrossentropy` compares logits to actual next token ID
-- Backward pass: gradients flow back through the network
-- Weight update: optimizer adjusts weights to reduce future loss
-- Early stopping: monitors val_loss and stops training when it stops improving
-- Checkpoints: saves models when val_loss is lowest
+For example, if the correct next token is "mat" (token ID 2) and the model produces logits for 5 tokens:
 
-In essence, the loss function is the __feedback mechanism__ that tells the model how to learn.
+`Logits:          [1.2,  0.5,  3.8,  0.1, -0.3]`
+`After softmax:   [0.06, 0.03, 0.82, 0.02, 0.01]  (probabilities sum to ~1.0)`
+`                               ↑`
+`                          token ID 2 = "mat"`
+
+`Loss = -log(0.82) = 0.20  (low loss — good prediction)`
+
+If the model had assigned only 0.05 probability to "mat", the loss would be `-log(0.05) = 3.0` — a much higher loss, producing larger gradients and bigger weight updates.
 
 ### Optimization
 
-Adam (Adaptive Moment Estimation) is an optimization algorithm used to update the model's weights during training based on the gradients computed from the loss function.
+Adam ([Kingma & Ba, 2015](https://arxiv.org/abs/1412.6980)) is an optimization algorithm used to update the model's weights during training based on the gradients computed from the loss function.
 
 ```python
 self.optimizer = tf.keras.optimizers.Adam(
@@ -390,7 +366,7 @@ The Adam optimizer stores and uses data from previous steps for optimization usi
 - Adaptive Learning Rates (Second Moment Estimate): Adam also tracks an exponential moving average of the squared gradients, known as the "second moment" vector (denoted as <i>v</i>). This information is used to adapt the learning rate for each individual parameter of the model, allowing for larger steps for infrequent parameters and smaller steps for frequent ones.
 - Bias Correction: The moving averages <i>m</i> and <i>v</i> are initialized with zeros and are therefore biased towards zero, especially during the initial iterations of training. Adam applies a bias correction mechanism to these estimates to ensure they are more accurate, particularly in the early stages of training.
 
-<i>m</i> and <i>v</i> are updated at every training step and persist throughout the entire training process, allowing the optimizer to intelligently navigate the complex loss landscape. The memory requirement for this is relatively low as it only involves storing two moving average vectors that are the same size as the model's parameters.
+<i>m</i> and <i>v</i> are updated at every training step and persist throughout the entire training process, allowing the optimizer to intelligently navigate the complex loss landscape. The memory requirement for this is relatively low as it only involves storing 2 moving average vectors that are the same size as the model's parameters.
 
 #### Gradients
 
@@ -398,27 +374,26 @@ The gradients inform the training code on how to adjust the internal learnable w
 
 The gradients indicate the direction and rate at which parameters should be adjusted to reduce error. They point "uphill" towards higher loss, which is why algorithms move in the negative gradient direction to go "downhill" (minimize loss). A large gradient indicates a steep slope (requiring significant updates), while a small gradient indicates a flat region. The backpropagation algorithm calculates the gradients for every parameter by traversing the network backward from the output layer to the input layer.
 
-How it fits into training:
-
-1. Forward pass: Model predicts next token
-2. Loss calculated via `SparseCategoricalCrossentropy`
-3. __Adam computes gradients__ using backpropagation
-4. __Adam updates weights__ using adaptive per-parameter learning rates
-5. Process repeats for each batch
-6. Early stopping monitors validation loss and stops when no improvement
-
 Adam is the default choice for training modern neural networks including language models like sLAM because it combines the benefits of momentum-based methods with adaptive learning rates.
 
 #### FFN weights
 
-The FFN in sLAM is two dense (fully connected) layers:
+The FFN in sLAM is 2 dense, fully connected layers:
 
 ```python
 layers.Dense(self.d_ff, activation="gelu")  # expand: 256 → 1024
 layers.Dense(self.d_model)                  # contract: 1024 → 256
 ```
 
-This expands the representation to a larger dimension (1024), applies a non-linear activation (GELU), then contracts back down to the model dimension (256). This expansion-contraction gives the model extra capacity to transform the representation in ways attention alone can't.
+This expands the representation to a larger dimension (1024), applies a non-linear __activation function__ (GELU), then contracts back down to the model dimension (256). An activation function is a mathematical function applied to a layer's output that introduces non-linearity — without it, stacking multiple layers would be equivalent to a single linear transformation, and the network couldn't learn complex patterns. This expansion-contraction gives the model extra capacity to transform the representation in ways attention alone can't.
+
+For example, with a simplified 3 → 6 → 3 expansion-contraction:
+
+`Input vector (3-dim):     [0.5, -0.2, 0.8]`
+`After expand + GELU (6-dim): [0.0, 0.7, -0.0, 1.2, 0.3, -0.0]  ← richer representation`
+`After contract (3-dim):   [0.9, 0.1, -0.4]  ← transformed back to original size`
+
+The input and output are the same dimensionality but the values have been transformed — the expansion to a higher dimension gives the network room to compute features it couldn't represent in the smaller space.
 
 A rough intuition for the division of labor:
 
@@ -435,29 +410,6 @@ A concrete way to see the difference:
 
 The deeper similarity is that both are just matrices of floats that get adjusted by Adam during training. In that sense all learned parameters in a neural network are matrices of numbers updated by gradient descent. The difference is in how they're used during the forward pass.
 
-### The Forward and Backward Pass
-
-A simplified view:
-
-- Forward:  embeddings → attention → ... → loss
-- Backward: loss → gradients → optimizer updates {Wq, Wk, Wv, FFN weights, embedding table}
-
-#### Backward pass for training/learning
-
-- The loss is computed (cross-entropy vs. the correct next token)
-- Gradients flow backward through the attention mechanism all the way back to the embeddings
-- The Adam optimizer then updates everything — both the embedding table values AND the Q, K, V weight matrices
-
-Attention doesn't modify the embedding table. Attention is the messenger that carries gradient signal back to the embeddings during backpropagation — it's the path through which the embeddings learn what they should represent. But the actual update to the embedding floats is done by the optimizer, not by attention itself.
-
-A concrete way to think about it: if "cat" and "mat" always appear in similar attention patterns, backpropagation will adjust their embedding vectors to be more similar — but attention didn't do that directly, it just created the context in which the loss signal could flow back and cause those updates.
-
-#### Forward pass for prediction
-
-- The embedding lookup produces vectors
-- Attention transforms those vectors into contextual representations (a weighted sum of Values)
-- The embeddings themselves are unchanged — attention just reads from them
-
 #### Training Monitoring
 
 Checkpoints serve as __intermediate saves of the model's learned weights__ during training, enabling recovery, model selection, and efficient disk management. A __Callback__ is a mechanism that hooks into the training process at specific events (epoch end, batch end, etc.). In `slam.py`, callbacks are custom classes like `ValidationPrintCallback` and `SmartCheckpointCallback` that inherit from `tf.keras.callbacks.Callback`. They execute custom logic during different stages of training.
@@ -471,11 +423,9 @@ The custom callbacks for monitoring training stability:
 
 ### What are the "weights"?
 
-A useful intuition: attention decides where to look (dynamic), while the embeddings determine what that means (static, learned at training time). Both are essential — attention alone with random weights predicts nothing useful, and embeddings without attention can't model sequential dependencies.
+A useful intuition: attention decides where to look (dynamic), while the embeddings determine what that means (static, learned at training time). Both are essential — attention alone with random weights predicts nothing useful, and embeddings without attention can't model sequential dependencies. See "Token and Positional Embeddings" above for details on how embeddings work.
 
-Embeddings are static lookup tables learned during training. They provide the initial representation of each token going into the transformer blocks. The token embedding matrix (50,000 × 256 = 12.8M parameters) encodes what each token "means" in isolation and the positional embeddings add sequence order information.
-
-The attention content (Q, K, V weight matrices) are also learned weights, but they compute dynamic, context-dependent transformations. The Q, K, V projection matrices transform the embeddings into vectors that can be compared against each other. The attention scores (softmax of QKᵀ/√d_k) determine which tokens' Values get weighted together. The final prediction comes from the dense output layer projecting the last hidden state → vocabulary logits. So the full chain is:
+The attention Q, K, V weight matrices are also learned weights, but they compute dynamic, context-dependent transformations — projecting embeddings into vectors that can be compared, with attention scores determining which Values get weighted together. The final prediction comes from the dense output layer projecting the last hidden state → vocabulary logits. The full chain of learned weights is:
 
   → Token Embedding (learned weights)
   → Positional embeddings (learned weights)
@@ -490,7 +440,12 @@ During generation, the model:
 
 1. *Encodes* the input prompt into token IDs
 2. *Predicts* probability distribution over all possible next tokens
-3. *Applies temperature scaling*: Controls randomness (lower = more deterministic, higher = more creative)
+3. *Applies temperature scaling*: Controls randomness (lower = more deterministic, higher = more creative). For example, given the same logits for 4 candidate tokens:
+
+   `Temperature 0.5: [0.01, 0.02, 0.95, 0.02]  ← concentrated, nearly deterministic`
+   `Temperature 1.0: [0.05, 0.10, 0.70, 0.15]  ← balanced`
+   `Temperature 1.5: [0.12, 0.18, 0.42, 0.28]  ← flattened, more creative/random`
+
 4. *Samples* next token from the probability distribution
 5. *Updates* context window by sliding tokens left and adding the new token
 6. *Repeats* until desired length or end token is reached
