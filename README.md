@@ -62,6 +62,9 @@ The code uses *cs_news* (the default) or *wikitext-2-v1* from Hugging Face as tr
 - `n_heads` (4): Number of parallel attention heads
 - `n_layers` (4): Number of transformer blocks stacked together
 - `d_ff` (1024): Hidden layer size in the transformer blocks
+- `temperature` (0.7): text generation randomness
+- `download` (cc_news): text input source
+- `num_datasets` (5000): number of datasets to download from *cc_news*
 
 ### Build a model
 
@@ -119,7 +122,7 @@ There are 2 kinds of embeddings:
 
 *Positional Embeddings*: Transformers process all tokens simultaneously and need explicit position information. Positional embeddings encode where each token appears in the sequence, enabling the model to predict correct word order and syntax.
 
-Token and positional embeddings are created using __Keras Embedding layers__, which are lookup tables that map indices to vectors.
+Token and positional embeddings are created using __Keras Embedding layers__, which are tables that map token indices to vectors.
 
 In the `TokenAndPositionEmbedding` class in the code:
 
@@ -155,7 +158,7 @@ position_embeddings = self.pos_emb(positions)    # Get position vectors
 return token_embeddings + position_embeddings    # Add them together
 ```
 
-Both embedding layers are the __learnable weights__ that are trained during model training through backpropagation. The 256 floats for each token start as random values and backpropagation adjusts each float based on the loss gradient. Over time, tokens that appear in similar contexts end up with similar embedding vectors. For example:
+Both embedding layers are __learnable weights__ that are trained during model training through backpropagation. The 256 floats for each token start as random values and backpropagation adjusts each float based on the loss gradient. Over time, tokens that appear in similar contexts end up with similar embedding vectors. For example:
 
 - Token "cat" might initially be: [0.02, -0.15, 0.08, ..., 0.12]
 - Token "dog" might initially be: [-0.11, 0.09, -0.03, ..., 0.18]
