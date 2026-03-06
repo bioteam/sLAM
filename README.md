@@ -197,11 +197,13 @@ In a decoder-only model like this the model attends to its own previous tokens t
 
 2.Score Q₅ against all previous keys
 
+```
 `score("the" vs "A")   = Q₅ · K₁ = 0.4`
 `score("the" vs "cat") = Q₅ · K₂ = 2.1`
 `score("the" vs "sat") = Q₅ · K₃ = 0.8`
 `score("the" vs "on")  = Q₅ · K₄ = 1.1`
 `score("the" vs "the") = Q₅ · K₅ = 3.9  ← attends to itself + context`
+```
 
 Future tokens are masked to -∞ before softmax, so they become 0.
 
@@ -317,6 +319,7 @@ An unappreciated detail to a novice is that all input to a neural network, train
 1. *Text Cleaning*: Filters high-quality text from datasets (*cc_news* or *wikitext*)
 2. *Tokenization*: Converts text to integer token IDs using Keras TextVectorization
 3. *Sequence Creation*: Sliding window approach creates input/target pairs for next token prediction, for example:
+
    - Input: `[token1, token2, token3, token4]`
    - Target: `[token2, token3, token4, token5]`
 
@@ -346,12 +349,14 @@ The loss function measures __how wrong the model's predictions are__ and serves 
 
 For example, if the correct next token is "mat" (token ID 2) and the model produces logits for 5 tokens:
 
+```
 `Logits:          [1.2,  0.5,  3.8,  0.1, -0.3]`
 `After softmax:   [0.06, 0.03, 0.82, 0.02, 0.01]  (probabilities sum to ~1.0)`
 `                               ↑`
 `                          token ID 2 = "mat"`
 
 `Loss = -log(0.82) = 0.20  (low loss — good prediction)`
+```
 
 If the model had assigned only 0.05 probability to "mat", the loss would be `-log(0.05) = 3.0` — a much higher loss, producing larger gradients and bigger weight updates.
 
@@ -394,9 +399,11 @@ This expands the representation to a larger dimension (1024), applies a non-line
 
 For example, with a simplified 3 → 6 → 3 expansion-contraction:
 
+```
 `Input vector (3-dim):     [0.5, -0.2, 0.8]`
 `After expand + GELU (6-dim): [0.0, 0.7, -0.0, 1.2, 0.3, -0.0]  ← richer representation`
 `After contract (3-dim):   [0.9, 0.1, -0.4]  ← transformed back to original size`
+```
 
 The input and output are the same dimensionality but the values have been transformed — the expansion to a higher dimension gives the network room to compute features it couldn't represent in the smaller space.
 
@@ -410,8 +417,10 @@ The FFN weights are also learned during training via backpropagation, just like 
 Each embedding corresponds to a specific token, but the FFN weights are applied via matrix multiplication to every token's vector, they are not tied to specific tokens — the same weights are applied to every position
 A concrete way to see the difference:
 
+```
 `Embedding:  token_id=42  →  look up row 42  →  [0.3, -0.1, 0.8, ...]`
 `FFN:        vector       →  multiply by W   →  new transformed vector`
+```
 
 The deeper similarity is that both are just matrices of floats that get adjusted by Adam during training. In that sense all learned parameters in a neural network are matrices of numbers updated by gradient descent. The difference is in how they're used during the forward pass.
 
@@ -447,9 +456,11 @@ During generation, the model:
 2. *Predicts* probability distribution over all possible next tokens
 3. *Applies temperature scaling*: Controls randomness (lower = more deterministic, higher = more creative). For example, given the same logits for 4 candidate tokens:
 
-   `Temperature 0.5: [0.01, 0.02, 0.95, 0.02]  ← concentrated, nearly deterministic`
-   `Temperature 1.0: [0.05, 0.10, 0.70, 0.15]  ← balanced`
-   `Temperature 1.5: [0.12, 0.18, 0.42, 0.28]  ← flattened, more creative/random`
+```
+`Temperature 0.5: [0.01, 0.02, 0.95, 0.02]  ← concentrated, nearly deterministic`
+`Temperature 1.0: [0.05, 0.10, 0.70, 0.15]  ← balanced`
+`Temperature 1.5: [0.12, 0.18, 0.42, 0.28]  ← flattened, more creative/random`
+```
 
 4. *Samples* next token from the probability distribution
 5. *Updates* context window by sliding tokens left and adding the new token
