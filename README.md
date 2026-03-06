@@ -187,11 +187,13 @@ In a decoder-only model like this the model attends to its own previous tokens t
 
 1.Each token gets Q, K, V vectors
 
+```
 `"A"   → Q₁, K₁, V₁`
 `"cat" → Q₂, K₂, V₂`
 `"sat" → Q₃, K₃, V₃`
 `"on"  → Q₄, K₄, V₄`
 `"the" → Q₅, K₅, V₅   ← this is the query position`
+```
 
 2.Score Q₅ against all previous keys
 
