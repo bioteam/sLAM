@@ -188,21 +188,21 @@ In a decoder-only model like this the model attends to its own previous tokens t
 1.Each token gets Q, K, V vectors
 
 ```
-`"A"   → Q₁, K₁, V₁`
-`"cat" → Q₂, K₂, V₂`
-`"sat" → Q₃, K₃, V₃`
-`"on"  → Q₄, K₄, V₄`
-`"the" → Q₅, K₅, V₅   ← this is the query position`
+"A"   → Q₁, K₁, V₁
+"cat" → Q₂, K₂, V₂
+"sat" → Q₃, K₃, V₃
+"on"  → Q₄, K₄, V₄
+"the" → Q₅, K₅, V₅   ← this is the query position
 ```
 
 2.Score Q₅ against all previous keys
 
 ```
-`score("the" vs "A")   = Q₅ · K₁ = 0.4`
-`score("the" vs "cat") = Q₅ · K₂ = 2.1`
-`score("the" vs "sat") = Q₅ · K₃ = 0.8`
-`score("the" vs "on")  = Q₅ · K₄ = 1.1`
-`score("the" vs "the") = Q₅ · K₅ = 3.9  ← attends to itself + context`
+score("the" vs "A")   = Q₅ · K₁ = 0.4
+score("the" vs "cat") = Q₅ · K₂ = 2.1
+score("the" vs "sat") = Q₅ · K₃ = 0.8
+score("the" vs "on")  = Q₅ · K₄ = 1.1
+score("the" vs "the") = Q₅ · K₅ = 3.9  ← attends to itself + context
 ```
 
 Future tokens are masked to -∞ before softmax, so they become 0.
@@ -257,8 +257,10 @@ Dropout ([Srivastava et al., 2014](https://jmlr.org/papers/v15/srivastava14a.htm
 
 For example, with 10% dropout applied to an 8-dimensional vector during training:
 
-`Before dropout: [0.5, 1.2, -0.3, 0.8, 0.1, -0.6, 0.9, 0.4]`
-`After dropout:  [0.5, 0.0, -0.3, 0.8, 0.1, -0.6, 0.0, 0.4]  ← ~10% randomly zeroed`
+```
+Before dropout: [0.5, 1.2, -0.3, 0.8, 0.1, -0.6, 0.9, 0.4]
+After dropout:  [0.5, 0.0, -0.3, 0.8, 0.1, -0.6, 0.0, 0.4]  ← ~10% randomly zeroed
+```
 
 Dropout is used in 3 places: before the blocks, within each block's attention mechanism, and after each block's feed-forward network.
 
@@ -285,8 +287,10 @@ Layer normalization ([Ba et al., 2016](https://arxiv.org/abs/1607.06450)) normal
 
 For example, a 4-dimensional activation vector before and after layer normalization:
 
-`Before: [1.0,  3.0,  5.0,  7.0]   (mean=4.0, std=2.24)`
-`After:  [-1.34, -0.45, 0.45, 1.34] (mean≈0.0, std≈1.0)`
+```
+Before: [1.0,  3.0,  5.0,  7.0]   (mean=4.0, std=2.24)
+After:  [-1.34, -0.45, 0.45, 1.34] (mean≈0.0, std≈1.0)
+```
 
 Layer normalization occurs in 2 places within each transformer block:
 
@@ -350,12 +354,12 @@ The loss function measures __how wrong the model's predictions are__ and serves 
 For example, if the correct next token is "mat" (token ID 2) and the model produces logits for 5 tokens:
 
 ```
-`Logits:          [1.2,  0.5,  3.8,  0.1, -0.3]`
-`After softmax:   [0.06, 0.03, 0.82, 0.02, 0.01]  (probabilities sum to ~1.0)`
-`                               ↑`
-`                          token ID 2 = "mat"`
+Logits:          [1.2,  0.5,  3.8,  0.1, -0.3]
+After softmax:   [0.06, 0.03, 0.82, 0.02, 0.01]  (probabilities sum to ~1.0)
+                               ↑
+                          token ID 2 = "mat"
 
-`Loss = -log(0.82) = 0.20  (low loss — good prediction)`
+Loss = -log(0.82) = 0.20  (low loss — good prediction)
 ```
 
 If the model had assigned only 0.05 probability to "mat", the loss would be `-log(0.05) = 3.0` — a much higher loss, producing larger gradients and bigger weight updates.
@@ -400,9 +404,9 @@ This expands the representation to a larger dimension (1024), applies a non-line
 For example, with a simplified 3 → 6 → 3 expansion-contraction:
 
 ```
-`Input vector (3-dim):     [0.5, -0.2, 0.8]`
-`After expand + GELU (6-dim): [0.0, 0.7, -0.0, 1.2, 0.3, -0.0]  ← richer representation`
-`After contract (3-dim):   [0.9, 0.1, -0.4]  ← transformed back to original size`
+Input vector (3-dim):     [0.5, -0.2, 0.8]
+After expand + GELU (6-dim): [0.0, 0.7, -0.0, 1.2, 0.3, -0.0]  ← richer representation
+After contract (3-dim):   [0.9, 0.1, -0.4]  ← transformed back to original size
 ```
 
 The input and output are the same dimensionality but the values have been transformed — the expansion to a higher dimension gives the network room to compute features it couldn't represent in the smaller space.
@@ -418,8 +422,8 @@ Each embedding corresponds to a specific token, but the FFN weights are applied 
 A concrete way to see the difference:
 
 ```
-`Embedding:  token_id=42  →  look up row 42  →  [0.3, -0.1, 0.8, ...]`
-`FFN:        vector       →  multiply by W   →  new transformed vector`
+Embedding:  token_id=42  →  look up row 42  →  [0.3, -0.1, 0.8, ...]
+FFN:        vector       →  multiply by W   →  new transformed vector
 ```
 
 The deeper similarity is that both are just matrices of floats that get adjusted by Adam during training. In that sense all learned parameters in a neural network are matrices of numbers updated by gradient descent. The difference is in how they're used during the forward pass.
@@ -457,9 +461,9 @@ During generation, the model:
 3. *Applies temperature scaling*: Controls randomness (lower = more deterministic, higher = more creative). For example, given the same logits for 4 candidate tokens:
 
 ```
-`Temperature 0.5: [0.01, 0.02, 0.95, 0.02]  ← concentrated, nearly deterministic`
-`Temperature 1.0: [0.05, 0.10, 0.70, 0.15]  ← balanced`
-`Temperature 1.5: [0.12, 0.18, 0.42, 0.28]  ← flattened, more creative/random`
+Temperature 0.5: [0.01, 0.02, 0.95, 0.02]  ← concentrated, nearly deterministic
+Temperature 1.0: [0.05, 0.10, 0.70, 0.15]  ← balanced
+Temperature 1.5: [0.12, 0.18, 0.42, 0.28]  ← flattened, more creative/random
 ```
 
 4. *Samples* next token from the probability distribution
