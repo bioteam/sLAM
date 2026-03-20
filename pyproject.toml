@@ -4,9 +4,8 @@ version = "0.1"
 description = "Code to create a GPT-2-style small LAnguage Model"
 readme = "README.md"
 requires-python = ">=3.9"
-authors = [
-    { name = "Brian Osborne", email = "bosborne@alum.mit.edu" },
-]
+authors = [{ name = "Brian Osborne", email = "bosborne@alum.mit.edu" }]
+keywords = ["generative-modeling", "neural-network"]
 dependencies = [
     "tqdm>=4.60",
     "numpy>=1.20",
