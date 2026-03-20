@@ -8,22 +8,20 @@ import time
 import pickle
 import re
 import nltk
-from tf.keras import layers  # type: ignore
-from tf.keras import Model  # type: ignore
-from tf.keras.optimizers.schedules import PolynomialDecay  # type: ignore
-from tf.keras.callbacks import EarlyStopping  # type: ignore  # noqa: F401
-from tf.keras.losses import SparseCategoricalCrossentropy  # type: ignore
-from tf.keras.optimizers.legacy import Adam  # type: ignore
-from tf.keras.optimizers import SGD  # type: ignore
-from tf.keras.callbacks import Callback  # type: ignore
-from tf.keras.mixed_precision import set_global_policy  # type: ignore
-from tf.keras.utils import register_keras_serializable  # type: ignore
-from tf.keras.models import load_model  # type: ignore
-from tf.keras.backend import get_value  # type: ignore
+import keras
+from keras import layers
+from keras import Model
+from keras.optimizers.schedules import PolynomialDecay
+from keras.callbacks import EarlyStopping  # noqa: F401
+from keras.losses import SparseCategoricalCrossentropy
+from keras.optimizers import Adam
+from keras.optimizers import SGD
+from keras.callbacks import Callback
+from keras.saving import register_keras_serializable
 from sklearn.model_selection import train_test_split
 from typing import Any
 
-set_global_policy("mixed_float16")
+keras.config.set_dtype_policy("mixed_float16")
 # Enable asynchronous memory allocation
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 
@@ -668,13 +666,13 @@ class slam_builder:
         train_dataset = train_dataset.shuffle(10000).batch(
             self.batch_size, drop_remainder=True
         )
-        train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
 
         val_dataset = tf.data.Dataset.from_tensor_slices(
             (val_inputs, val_targets)
         )
         val_dataset = val_dataset.batch(self.batch_size, drop_remainder=True)
-        val_dataset = val_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)
         if self.verbose:
             print(
                 f"prepare_datasets() - train_dataset: {train_dataset}, val_dataset: {val_dataset}"
@@ -818,8 +816,8 @@ class slam_builder:
 
         # Safely get dataset size - handle resource dtype issue
         try:
-            cardinality = tf.data.experimental.cardinality(train_dataset)
-            if cardinality == tf.data.experimental.UNKNOWN_CARDINALITY:
+            cardinality = train_dataset.cardinality()
+            if cardinality == tf.data.UNKNOWN_CARDINALITY:
                 # Estimate dataset size if cardinality is unknown
                 train_dataset_size = 1000  # Default fallback value
                 if self.verbose:
@@ -968,7 +966,7 @@ class slam_builder:
         if isinstance(value, tf.Variable):
             value = value.read_value()
         if tf.is_tensor(value):
-            value = get_value(value)
+            value = value.numpy()
         if isinstance(value, (np.ndarray, np.generic)):
             try:
                 value = np.asarray(value).item()
@@ -1242,7 +1240,7 @@ class slam_builder:
         if not os.path.exists(f"{self.name}.keras"):
             sys.exit(f"Model file not found: {self.name}.keras")
         try:
-            model = load_model(f"{self.name}.keras")
+            model = keras.saving.load_model(f"{self.name}.keras")
         except Exception as e:
             sys.exit(
                 f"Model file could not be loaded with the current architecture. Error: {e}"
