@@ -171,6 +171,24 @@ A core innovation of transformers ([Vaswani et al., 2017](https://arxiv.org/abs/
 
 Attention is a computational mechanism that transforms token embeddings into Query (Q), Key (K), and Value (V) vectors, then computes similarity scores between Q and K to generate weights via softmax, and finally produces a weighted sum of the V vectors. Multi-head attention performs this computation multiple times in parallel with different learned transformations. Position influences attention in 2 ways: positional embeddings are incorporated into the token representations that become Q, K, and V, and causal masking constrains which positions each token can attend to—preventing attention to future tokens and allowing only self and past token attention.
 
+A token is just a piece of text mapped to an id. The attention mechanism transforms each token's embedding into three separate vectors: a query, a key, and a value.
+
+```text
+Q: Represents what information is being sought at this position in the sequence.
+K: Represents what kind of information is available at this position.
+V: Holds the actual content that will be contributed from this position.
+```
+
+How they work together
+The model computes a relevance score between every query and every key — determining how related any two positions in the sequence are.
+
+Those scores are normalized into attention weights, so they sum to 1.
+
+The values are blended together according to those weights. Positions with high relevance scores contribute more; positions with low scores contribute almost nothing.
+
+Why separate keys from values?
+A position's relevance to another position is a different thing from the information it should contribute. Separating K and V lets the model learn to decouple "what makes this position relevant" from "what information this position passes along." The same word in different contexts can advertise similar relevance but contribute different information, or vice versa.
+
 #### Attention computation
 
 `Attention(Q,K,V) = softmax(QK^T/√d_k)V`
@@ -181,13 +199,71 @@ During the Q-K comparison, some token pairs produce high dot product scores and 
 
 Q, K, and V are __computed from the input embeddings__ using learnable __weight matrices__. So the actual weights that get adjusted during backpropagation are those transformation matrices (often called projection matrices). For each input embedding, the model multiplies it by these weight matrices to produce Q, K, and V vectors. During training, backpropagation adjusts these weight matrices so that the resulting Q, K, V vectors encode relationships that help the model predict the next token accurately.
 
+Say we have the sentence "The cat sat" and a very small embedding/model (*d_model*) dimension of 4.
+
+Step 1: Token embeddings
+
+After embedding, each token is a vector of numbers:
+
+```text
+"The" → [0.2, -0.1, 0.5, 0.3]
+"cat" → [0.8,  0.4, -0.2, 0.1]
+"sat" → [0.1,  0.6, 0.3, -0.4]
+```
+
+Step 2: The model multiplies each embedding by three learned weight matrices
+
+These are matrices of numbers the model learned during training. Each matrix is 4×4 in this example. The same three matrices are applied to every token.
+
+```text
+W_Q (query weights):        W_K (key weights):         W_V (value weights):
+[[ 0.1, 0.3, -0.2, 0.1],   [[ 0.2, -0.1, 0.4, 0.0],  [[ 0.5, 0.1, -0.3, 0.2],
+ [ 0.4, 0.0,  0.1, 0.5],    [-0.3,  0.2, 0.1, 0.3],   [ 0.0, 0.4,  0.1, 0.3],
+ [-0.1, 0.2,  0.3, 0.0],    [ 0.1,  0.5, 0.0, 0.1],   [-0.2, 0.3,  0.5, 0.0],
+ [ 0.2, 0.1, -0.1, 0.3]]    [ 0.0,  0.1, 0.3, 0.2]]   [ 0.1, 0.0,  0.2, 0.4]]
+```
+
+Step 3: Matrix multiplication produces Q, K, V for each token
+
+For "cat" [0.8, 0.4, -0.2, 0.1]:
+
+```text
+Q_cat = embedding × W_Q = [0.26, 0.25, -0.19, 0.31]
+K_cat = embedding × W_K = [0.26, 0.0,  0.34, 0.14]
+V_cat = embedding × W_V = [0.45, 0.18, -0.30, 0.32]
+```
+
+These are just new vectors — different linear projections of the same embedding.
+
+Step 4: Attention scores come from comparing queries to keys
+
+To figure out how much "sat" should attend to "cat", the model takes the dot product of Q_sat and K_cat:
+
+```text
+Q_sat = [-0.01, 0.37, 0.15, -0.09]
+K_cat = [0.26,  0.0,  0.34,  0.14]
+
+score = (-0.01×0.26) + (0.37×0.0) + (0.15×0.34) + (-0.09×0.14)
+      = -0.003 + 0.0 + 0.051 - 0.013
+      = 0.035
+```
+
+The model computes this for every query-key pair, normalizes the scores, then uses them to create a weighted blend of the value vectors. So the output for the "sat" position would be something like:
+
+`output_sat = 0.30 × V_the + 0.45 × V_cat + 0.25 × V_sat`
+
+The weights (0.30, 0.45, 0.25) come from the normalized scores. In this case "cat" got the highest weight, so its value vector contributes the most to the output at the "sat" position.
+
+The key takeaway
+Q, K, and V are just different numerical projections of the same embedding, produced by three separate weight matrices.
+
 ##### Attention and predicting the next word
 
 In a decoder-only model like this the model attends to its own previous tokens to predict the next one. This is called causal self-attention — each token can only see tokens before it, not future ones. If the input is the sequence of tokens *A | cat | sat | on | the* then we want to predict the word after "the". Each token attends to all preceding tokens (including itself), something like this:
 
 1.Each token gets Q, K, V vectors
 
-```
+```text
 "A"   → Q₁, K₁, V₁
 "cat" → Q₂, K₂, V₂
 "sat" → Q₃, K₃, V₃
@@ -197,7 +273,7 @@ In a decoder-only model like this the model attends to its own previous tokens t
 
 2.Score Q₅ against all previous keys
 
-```
+```text
 score("the" vs "A")   = Q₅ · K₁ = 0.4
 score("the" vs "cat") = Q₅ · K₂ = 2.1
 score("the" vs "sat") = Q₅ · K₃ = 0.8
@@ -257,7 +333,7 @@ Dropout ([Srivastava et al., 2014](https://jmlr.org/papers/v15/srivastava14a.htm
 
 For example, with 10% dropout applied to an 8-dimensional vector during training:
 
-```
+```text
 Before dropout: [0.5, 1.2, -0.3, 0.8, 0.1, -0.6, 0.9, 0.4]
 After dropout:  [0.5, 0.0, -0.3, 0.8, 0.1, -0.6, 0.0, 0.4]  ← ~10% randomly zeroed
 ```
@@ -287,7 +363,7 @@ Layer normalization ([Ba et al., 2016](https://arxiv.org/abs/1607.06450)) normal
 
 For example, a 4-dimensional activation vector before and after layer normalization:
 
-```
+```text
 Before: [1.0,  3.0,  5.0,  7.0]   (mean=4.0, std=2.24)
 After:  [-1.34, -0.45, 0.45, 1.34] (mean≈0.0, std≈1.0)
 ```
@@ -353,7 +429,7 @@ The loss function measures __how wrong the model's predictions are__ and serves 
 
 For example, if the correct next token is "mat" (token ID 2) and the model produces logits for 5 tokens:
 
-```
+```text
 Logits:          [1.2,  0.5,  3.8,  0.1, -0.3]
 After softmax:   [0.06, 0.03, 0.82, 0.02, 0.01]  (probabilities sum to ~1.0)
                                ↑
@@ -403,10 +479,10 @@ This expands the representation to a larger dimension (1024), applies a non-line
 
 For example, with a simplified 3 → 6 → 3 expansion-contraction:
 
-```
-Input vector (3-dim):     [0.5, -0.2, 0.8]
+```text
+Input vector (3-dim):        [0.5, -0.2, 0.8]
 After expand + GELU (6-dim): [0.0, 0.7, -0.0, 1.2, 0.3, -0.0]  ← richer representation
-After contract (3-dim):   [0.9, 0.1, -0.4]  ← transformed back to original size
+After contract (3-dim):      [0.9, 0.1, -0.4]  ← transformed back to original size
 ```
 
 The input and output are the same dimensionality but the values have been transformed — the expansion to a higher dimension gives the network room to compute features it couldn't represent in the smaller space.
@@ -421,7 +497,7 @@ The FFN weights are also learned during training via backpropagation, just like 
 Each embedding corresponds to a specific token, but the FFN weights are applied via matrix multiplication to every token's vector, they are not tied to specific tokens — the same weights are applied to every position
 A concrete way to see the difference:
 
-```
+```text
 Embedding:  token_id=42  →  look up row 42  →  [0.3, -0.1, 0.8, ...]
 FFN:        vector       →  multiply by W   →  new transformed vector
 ```
@@ -460,15 +536,15 @@ During generation, the model:
 2. *Predicts* probability distribution over all possible next tokens
 3. *Applies temperature scaling*: Controls randomness (lower = more deterministic, higher = more creative). For example, given the same logits for 4 candidate tokens:
 
-```
+```text
 Temperature 0.5: [0.01, 0.02, 0.95, 0.02]  ← concentrated, nearly deterministic
 Temperature 1.0: [0.05, 0.10, 0.70, 0.15]  ← balanced
 Temperature 1.5: [0.12, 0.18, 0.42, 0.28]  ← flattened, more creative/random
 ```
 
-4. *Samples* next token from the probability distribution
-5. *Updates* context window by sliding tokens left and adding the new token
-6. *Repeats* until desired length or end token is reached
+1. *Samples* next token from the probability distribution
+2. *Updates* context window by sliding tokens left and adding the new token
+3. *Repeats* until desired length or end token is reached
 
 ### Model Size Comparisons
 
