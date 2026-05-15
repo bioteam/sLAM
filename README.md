@@ -179,14 +179,16 @@ K: Represents what kind of information is available at this position.
 V: Holds the actual content that will be contributed from this position.
 ```
 
-How they work together
+#### How they work together
+
 The model computes a relevance score between every query and every key — determining how related any two positions in the sequence are.
 
 Those scores are normalized into attention weights, so they sum to 1.
 
 The values are blended together according to those weights. Positions with high relevance scores contribute more; positions with low scores contribute almost nothing.
 
-Why separate keys from values?
+#### Why separate keys from values?
+
 A position's relevance to another position is a different thing from the information it should contribute. Separating K and V lets the model learn to decouple "what makes this position relevant" from "what information this position passes along." The same word in different contexts can advertise similar relevance but contribute different information, or vice versa.
 
 #### Attention computation
@@ -233,7 +235,7 @@ K_cat = embedding × W_K = [0.26, 0.0,  0.34, 0.14]
 V_cat = embedding × W_V = [0.45, 0.18, -0.30, 0.32]
 ```
 
-These are just new vectors — different linear projections of the same embedding.
+These are new vectors — different linear projections of the same embedding.
 
 Step 4: Attention scores come from comparing queries to keys
 
@@ -329,13 +331,13 @@ __Dense layer__ - projects the output to the vocabulary size to produce logits f
 
 #### Dropout layer
 
-Dropout ([Srivastava et al., 2014](https://jmlr.org/papers/v15/srivastava14a.html)) is a __regularization technique__ that prevents overfitting. During training, it randomly sets a percentage of values (10% by default in sLAM) to zero. This forces the model to learn more robust features by not relying on any single activation value. It's like training with incomplete information—the model learns to work with different random subsets of neurons, which makes it generalize better to new data. During generation/inference, dropout is not applied.
+Dropout ([Srivastava et al., 2014](https://jmlr.org/papers/v15/srivastava14a.html)) is a __regularization technique__ that prevents overfitting. During training, it randomly sets a percentage of values (10% by default in sLAM) to zero. This forces the model to learn more robust features by not relying on any single activation value. It's like training with incomplete information—the model learns to work with different random subsets of neurons, which makes it generalize better to new data. Keras uses *inverted dropout*: the surviving values are scaled up by `1 / (1 - rate)` so the expected activation stays the same. That means no adjustment is needed at inference, and dropout is simply skipped during generation.
 
-For example, with 10% dropout applied to an 8-dimensional vector during training:
+For example, with 10% dropout applied to an 8-dimensional vector during training (surviving values scaled by `1 / 0.9 ≈ 1.111`):
 
 ```text
-Before dropout: [0.5, 1.2, -0.3, 0.8, 0.1, -0.6, 0.9, 0.4]
-After dropout:  [0.5, 0.0, -0.3, 0.8, 0.1, -0.6, 0.0, 0.4]  ← ~10% randomly zeroed
+Before dropout: [0.5,  1.2,  -0.3, 0.8,  0.1,  -0.6,  0.9, 0.4]
+After dropout:  [0.56, 1.33, -0.33, 0.0, 0.11, -0.67, 1.0, 0.44]  ← 1 of 8 zeroed (~10%)
 ```
 
 Dropout is used in 3 places: before the blocks, within each block's attention mechanism, and after each block's feed-forward network.
@@ -356,7 +358,7 @@ The model has 4 blocks, by default, specified by the `n_layers` parameter. Each 
 
 ##### Layer Normalization
 
-Layer normalization ([Ba et al., 2016](https://arxiv.org/abs/1607.06450)) normalizes the activations (output values) of a layer to have a mean of 0 and standard deviation of 1. This keeps the values from becoming too large or too small, which:
+Layer normalization ([Ba et al., 2016](https://arxiv.org/abs/1607.06450)) normalizes the activations (output values) of a layer to have a mean of 0 and standard deviation of 1. The underlying operation is *z-score normalization* from statistics—subtract the mean, divide by the standard deviation—applied across the feature dimension of each individual sample, plus two learnable parameters that let the network re-scale and re-shift if needed. This keeps the values from becoming too large or too small, which:
 
 - Prevents training from becoming unstable
 - Allows for higher learning rates
